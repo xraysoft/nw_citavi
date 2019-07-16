@@ -1,0 +1,30 @@
+{
+  "name": "netzweber/nw_citavi",
+  "type": "typo3-cms-extension",
+  "description": "",
+  "keywords": [
+    "TYPO3",
+    "extension",
+    "citavi"
+  ],
+  "homepage": "http://www.netzweber.de",
+  "authors": [
+    {
+      "name": "Lutz Eckelmann",
+      "email": "lutz.eckelmann@netzweber.de",
+      "homepage": "http://www.netzweber.de",
+      "role": "Developer"
+    }
+  ],
+  "require": {
+		"typo3/cms-core": "^9 | ^8 | ^7"
+	},
+	"replace": {
+		"nw_citavi": "self.version"
+	},
+	"autoload": {
+		"psr-4": {
+			"Netzweber\\NwCitavi\\": "typo3conf/ext/nw_citavi/Classes/"
+		}
+	}
+}

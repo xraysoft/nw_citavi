@@ -1,0 +1,308 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<xliff version="1.0">
+	<file source-language="en" datatype="plaintext" original="messages" date="2018-07-16T10:29:58Z" product-name="nw_citavi">
+		<header/>
+		<body>
+			<trans-unit id="tx_nw_citavi_domain_model_citavilist">
+				<source>List</source>
+			</trans-unit>
+			<trans-unit id="tx_nw_citavi_domain_model_citavilist.description">
+				<source></source>
+			</trans-unit>
+			<trans-unit id="tx_nw_citavi_domain_model_citavidetail">
+				<source>Detail</source>
+			</trans-unit>
+			<trans-unit id="tx_nw_citavi_domain_model_citavidetail.description">
+				<source></source>
+			</trans-unit>
+			<trans-unit id="tx_nw_citavi_domain_model_citaviimporter">
+				<source>Importer</source>
+			</trans-unit>
+			<trans-unit id="tx_nw_citavi_domain_model_citaviimporter.description">
+				<source></source>
+			</trans-unit>
+			<trans-unit id="tx_nw_citavi_domain_model_citavitest">
+				<source>Testview</source>
+			</trans-unit>
+			<trans-unit id="tx_nw_citavi_domain_model_citavitest.description">
+				<source></source>
+			</trans-unit>
+			<trans-unit id="citavi_hash.description">
+				<source>citaviHash</source>
+			</trans-unit>
+			<trans-unit id="citavi_id.description">
+				<source>citaviId</source>
+			</trans-unit>
+			<trans-unit id="created_by.description">
+				<source>createdBy</source>
+			</trans-unit>
+			<trans-unit id="created_by_sid.description">
+				<source>createdBySid</source>
+			</trans-unit>
+			<trans-unit id="created_on.description">
+				<source>createdOn</source>
+			</trans-unit>
+			<trans-unit id="modified_by.description">
+				<source>modifiedBy</source>
+			</trans-unit>
+			<trans-unit id="modified_by_sid.description">
+				<source>modifiedBySid</source>
+			</trans-unit>
+			<trans-unit id="modified_on.description">
+				<source>modifiedOn</source>
+			</trans-unit>
+			<trans-unit id="reference_type.description">
+				<source>referenceType</source>
+			</trans-unit>
+			<trans-unit id="parent_reference_type.description">
+				<source>parentReferenceType</source>
+			</trans-unit>
+			<trans-unit id="i_s_b_n.description">
+				<source>iSBN</source>
+			</trans-unit>
+			<trans-unit id="sequence_number.description">
+				<source>sequenceNumber</source>
+			</trans-unit>
+			<trans-unit id="abstract.description">
+				<source>abstract</source>
+			</trans-unit>
+			<trans-unit id="abstract_r_t_f.description">
+				<source>abstractRTF</source>
+			</trans-unit>
+			<trans-unit id="access_date.description">
+				<source>accessDate</source>
+			</trans-unit>
+			<trans-unit id="additions.description">
+				<source>additions</source>
+			</trans-unit>
+			<trans-unit id="ref_authors.description">
+				<source>refAuthors</source>
+			</trans-unit>
+			<trans-unit id="ref_categories.description">
+				<source>refCategories</source>
+			</trans-unit>
+			<trans-unit id="citation_key_update_type.description">
+				<source>citationKeyUpdateType</source>
+			</trans-unit>
+			<trans-unit id="ref_collaborators.description">
+				<source>refCollaborators</source>
+			</trans-unit>
+			<trans-unit id="custom_field1.description">
+				<source>customField1</source>
+			</trans-unit>
+			<trans-unit id="custom_field2.description">
+				<source>customField2</source>
+			</trans-unit>
+			<trans-unit id="custom_field3.description">
+				<source>customField3</source>
+			</trans-unit>
+			<trans-unit id="custom_field4.description">
+				<source>customField4</source>
+			</trans-unit>
+			<trans-unit id="custom_field5.description">
+				<source>customField5</source>
+			</trans-unit>
+			<trans-unit id="custom_field6.description">
+				<source>customField6</source>
+			</trans-unit>
+			<trans-unit id="custom_field7.description">
+				<source>customField7</source>
+			</trans-unit>
+			<trans-unit id="custom_field8.description">
+				<source>customField8</source>
+			</trans-unit>
+			<trans-unit id="custom_field9.description">
+				<source>customField9</source>
+			</trans-unit>
+			<trans-unit id="book_date.description">
+				<source>bookDate</source>
+			</trans-unit>
+			<trans-unit id="default_location_i_d.description">
+				<source>defaultLocationID</source>
+			</trans-unit>
+			<trans-unit id="edition.description">
+				<source>edition</source>
+			</trans-unit>
+			<trans-unit id="ref_editors.description">
+				<source>refEditors</source>
+			</trans-unit>
+			<trans-unit id="evaluation.description">
+				<source>evaluation</source>
+			</trans-unit>
+			<trans-unit id="evaluation_r_t_f.description">
+				<source>evaluationRTF</source>
+			</trans-unit>
+			<trans-unit id="ref_keywords.description">
+				<source>refKeywords</source>
+			</trans-unit>
+			<trans-unit id="book_language.description">
+				<source>bookLanguage</source>
+			</trans-unit>
+			<trans-unit id="book_note.description">
+				<source>bookNote</source>
+			</trans-unit>
+			<trans-unit id="number.description">
+				<source>number</source>
+			</trans-unit>
+			<trans-unit id="number_of_volumes.description">
+				<source>numberOfVolumes</source>
+			</trans-unit>
+			<trans-unit id="online_address.description">
+				<source>onlineAddress</source>
+			</trans-unit>
+			<trans-unit id="ref_organizations.description">
+				<source>refOrganizations</source>
+			</trans-unit>
+			<trans-unit id="original_checked_by.description">
+				<source>originalCheckedBy</source>
+			</trans-unit>
+			<trans-unit id="original_publication.description">
+				<source>originalPublication</source>
+			</trans-unit>
+			<trans-unit id="ref_others_involved.description">
+				<source>refOthersInvolved</source>
+			</trans-unit>
+			<trans-unit id="page_count.description">
+				<source>pageCount</source>
+			</trans-unit>
+			<trans-unit id="page_range.description">
+				<source>pageRange</source>
+			</trans-unit>
+			<trans-unit id="parallel_title.description">
+				<source>parallelTitle</source>
+			</trans-unit>
+			<trans-unit id="ref_periodical.description">
+				<source>refPeriodical</source>
+			</trans-unit>
+			<trans-unit id="place_of_publication.description">
+				<source>placeOfPublication</source>
+			</trans-unit>
+			<trans-unit id="price.description">
+				<source>price</source>
+			</trans-unit>
+			<trans-unit id="ref_publishers.description">
+				<source>refPublishers</source>
+			</trans-unit>
+			<trans-unit id="rating.description">
+				<source>rating</source>
+			</trans-unit>
+			<trans-unit id="ref_series_title.description">
+				<source>refSeriesTitle</source>
+			</trans-unit>
+			<trans-unit id="short_title.description">
+				<source>shortTitle</source>
+			</trans-unit>
+			<trans-unit id="source_of_bibliographic_information.description">
+				<source>sourceOfBibliographicInformation</source>
+			</trans-unit>
+			<trans-unit id="specific_field1.description">
+				<source>specificField1</source>
+			</trans-unit>
+			<trans-unit id="specific_field2.description">
+				<source>specificField2</source>
+			</trans-unit>
+			<trans-unit id="specific_field4.description">
+				<source>specificField4</source>
+			</trans-unit>
+			<trans-unit id="specific_field7.description">
+				<source>specificField7</source>
+			</trans-unit>
+			<trans-unit id="storage_medium.description">
+				<source>storageMedium</source>
+			</trans-unit>
+			<trans-unit id="subtitle.description">
+				<source>subtitle</source>
+			</trans-unit>
+			<trans-unit id="table_of_contents.description">
+				<source>tableOfContents</source>
+			</trans-unit>
+			<trans-unit id="table_of_contents_r_t_f.description">
+				<source>tableOfContentsRTF</source>
+			</trans-unit>
+			<trans-unit id="title.description">
+				<source>title</source>
+			</trans-unit>
+			<trans-unit id="title_in_other_languages.description">
+				<source>titleInOtherLanguages</source>
+			</trans-unit>
+			<trans-unit id="title_supplement.description">
+				<source>titleSupplement</source>
+			</trans-unit>
+			<trans-unit id="translated_title.description">
+				<source>translatedTitle</source>
+			</trans-unit>
+			<trans-unit id="uniform_title.description">
+				<source>uniformTitle</source>
+			</trans-unit>
+			<trans-unit id="book_volume.description">
+				<source>bookVolume</source>
+			</trans-unit>
+			<trans-unit id="book_year.description">
+				<source>bookYear</source>
+			</trans-unit>
+			<trans-unit id="page_range_start.description">
+				<source>pageRangeStart</source>
+			</trans-unit>
+			<trans-unit id="page_range_end.description">
+				<source>pageRangeEnd</source>
+			</trans-unit>
+			<trans-unit id="doi.description">
+				<source>doi</source>
+			</trans-unit>
+			<trans-unit id="sort_date.description">
+				<source>sortDate</source>
+			</trans-unit>
+			<trans-unit id="literaturlist_id.description">
+				<source>literaturlistId</source>
+			</trans-unit>
+			<trans-unit id="attachment.description">
+				<source>attachment</source>
+			</trans-unit>
+			<trans-unit id="cover.description">
+				<source>cover</source>
+			</trans-unit>
+			<trans-unit id="categories.description">
+				<source>categories</source>
+			</trans-unit>
+			<trans-unit id="keywords.description">
+				<source>keywords</source>
+			</trans-unit>
+			<trans-unit id="editors.description">
+				<source>editors</source>
+			</trans-unit>
+			<trans-unit id="authors.description">
+				<source>authors</source>
+			</trans-unit>
+			<trans-unit id="others_involved.description">
+				<source>othersInvolved</source>
+			</trans-unit>
+			<trans-unit id="collaborators.description">
+				<source>collaborators</source>
+			</trans-unit>
+			<trans-unit id="organizations.description">
+				<source>organizations</source>
+			</trans-unit>
+			<trans-unit id="publishers.description">
+				<source>publishers</source>
+			</trans-unit>
+			<trans-unit id="periodicals.description">
+				<source>periodicals</source>
+			</trans-unit>
+			<trans-unit id="seriestitles.description">
+				<source>seriestitles</source>
+			</trans-unit>
+			<trans-unit id="knowledge_items.description">
+				<source>knowledgeItems</source>
+			</trans-unit>
+			<trans-unit id="locations.description">
+				<source>locations</source>
+			</trans-unit>
+			<trans-unit id="parent_references.description">
+				<source>parentReferences</source>
+			</trans-unit>
+			<trans-unit id="child_references.description">
+				<source>childReferences</source>
+			</trans-unit>
+		</body>
+	</file>
+</xliff>

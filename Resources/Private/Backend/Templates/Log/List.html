@@ -1,0 +1,47 @@
+
+<f:layout name="Default" />
+
+This Template is responsible for creating a table of domain objects.
+
+If you modify this template, do not forget to change the overwrite settings
+in /Configuration/ExtensionBuilder/settings.yaml:
+  Resources:
+    Private:
+      Templates:
+        List.html: keep
+
+Otherwise your changes will be overwritten the next time you save the extension in the extension builder
+
+<f:section name="content">
+<h1>Listing for Log</h1>
+
+<f:flashMessages />
+
+<table  class="tx_nwcitavi" >
+	<tr>
+		<th><f:translate key="tx_nwcitavi_domain_model_log.error" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_log.errortext" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_log.func" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_log.logtype" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_log.details" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_log.importkey" /></th>
+		<th> </th>
+		<th> </th>
+	</tr>
+
+	<f:for each="{logs}" as="log">
+		<tr>
+			<td><f:link.action action="show" arguments="{log : log}"> {log.error}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{log : log}"> {log.errortext}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{log : log}"> {log.func}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{log : log}"> {log.logtype}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{log : log}"> {log.details}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{log : log}"> {log.importkey}</f:link.action></td>
+			<td><f:link.action action="edit" arguments="{log : log}">Edit</f:link.action></td>
+			<td><f:link.action action="delete" arguments="{log : log}">Delete</f:link.action></td>
+		</tr>
+	</f:for>
+</table>
+
+<f:link.action action="new">New Log</f:link.action>
+</f:section>

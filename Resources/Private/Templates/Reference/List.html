@@ -1,0 +1,192 @@
+<html xmlns:f="http://typo3.org/ns/TYPO3/CMS/Fluid/ViewHelpers" data-namespace-typo3-fluid="true">
+<f:layout name="Default" />
+
+This Template is responsible for creating a table of domain objects.
+
+If you modify this template, do not forget to change the overwrite settings
+in /Configuration/ExtensionBuilder/settings.yaml:
+  Resources:
+    Private:
+      Templates:
+        List.html: keep
+
+Otherwise your changes will be overwritten the next time you save the extension in the extension builder
+
+<f:section name="main">
+<h1>Listing for Reference</h1>
+
+<f:flashMessages />
+
+<table  class="tx_nwcitavi" >
+	<tr>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.citavi_hash" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.citavi_id" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.created_by" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.created_by_sid" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.created_on" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.modified_by" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.modified_by_sid" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.modified_on" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.reference_type" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.parent_reference_type" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.i_s_b_n" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.sequence_number" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.abstract" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.abstract_r_t_f" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.access_date" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.additions" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.ref_authors" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.ref_categories" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.citation_key_update_type" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.ref_collaborators" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.custom_field1" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.custom_field2" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.custom_field3" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.custom_field4" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.custom_field5" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.custom_field6" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.custom_field7" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.custom_field8" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.custom_field9" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.book_date" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.default_location_i_d" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.edition" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.ref_editors" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.evaluation" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.evaluation_r_t_f" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.ref_keywords" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.book_language" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.book_note" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.number" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.number_of_volumes" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.online_address" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.ref_organizations" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.original_checked_by" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.original_publication" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.ref_others_involved" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.page_count" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.page_range" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.parallel_title" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.ref_periodical" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.place_of_publication" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.price" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.ref_publishers" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.rating" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.ref_series_title" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.short_title" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.source_of_bibliographic_information" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.specific_field1" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.specific_field2" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.specific_field4" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.specific_field7" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.storage_medium" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.subtitle" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.table_of_contents" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.table_of_contents_r_t_f" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.title" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.title_in_other_languages" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.title_supplement" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.translated_title" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.uniform_title" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.book_volume" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.book_year" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.page_range_start" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.page_range_end" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.doi" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.sort_date" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.literaturlist_id" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.attachment" /></th>
+		<th><f:translate key="tx_nwcitavi_domain_model_reference.cover" /></th>
+		<th> </th>
+		<th> </th>
+	</tr>
+
+	<f:for each="{references}" as="reference">
+		<tr>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.citaviHash}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.citaviId}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.createdBy}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.createdBySid}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.createdOn}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.modifiedBy}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.modifiedBySid}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.modifiedOn}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.referenceType}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.parentReferenceType}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.iSBN}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.sequenceNumber}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.abstract}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.abstractRTF}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.accessDate}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.additions}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.refAuthors}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.refCategories}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.citationKeyUpdateType}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.refCollaborators}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.customField1}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.customField2}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.customField3}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.customField4}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.customField5}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.customField6}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.customField7}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.customField8}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.customField9}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.bookDate}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.defaultLocationID}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.edition}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.refEditors}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.evaluation}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.evaluationRTF}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.refKeywords}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.bookLanguage}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.bookNote}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.number}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.numberOfVolumes}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.onlineAddress}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.refOrganizations}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.originalCheckedBy}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.originalPublication}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.refOthersInvolved}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.pageCount}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.pageRange}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.parallelTitle}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.refPeriodical}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.placeOfPublication}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.price}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.refPublishers}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.rating}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.refSeriesTitle}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.shortTitle}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.sourceOfBibliographicInformation}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.specificField1}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.specificField2}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.specificField4}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.specificField7}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.storageMedium}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.subtitle}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.tableOfContents}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.tableOfContentsRTF}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.title}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.titleInOtherLanguages}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.titleSupplement}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.translatedTitle}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.uniformTitle}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.bookVolume}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.bookYear}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.pageRangeStart}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.pageRangeEnd}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.doi}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.sortDate}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.literaturlistId}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.attachment.originalResource.name}</f:link.action></td>
+			<td><f:link.action action="show" arguments="{reference : reference}"> {reference.cover.originalResource.name}</f:link.action></td>
+			<td><f:link.action action="edit" arguments="{reference : reference}">Edit</f:link.action></td>
+			<td><f:link.action action="delete" arguments="{reference : reference}">Delete</f:link.action></td>
+		</tr>
+	</f:for>
+</table>
+
+<f:link.action action="new">New Reference</f:link.action>
+</f:section>
+</html>

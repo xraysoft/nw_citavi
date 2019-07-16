@@ -1,0 +1,827 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<xliff version="1.0">
+	<file source-language="en" datatype="plaintext" original="messages" date="2018-07-16T10:29:58Z" product-name="nw_citavi">
+		<header/>
+		<body>
+			<trans-unit id="tx_nw_citavi_domain_model_citavilist">
+				<source>List</source>
+			</trans-unit>
+			<trans-unit id="tx_nw_citavi_domain_model_citavilist.description">
+				<source></source>
+			</trans-unit>
+			<trans-unit id="tx_nw_citavi_domain_model_citavidetail">
+				<source>Detail</source>
+			</trans-unit>
+			<trans-unit id="tx_nw_citavi_domain_model_citavidetail.description">
+				<source></source>
+			</trans-unit>
+			<trans-unit id="tx_nw_citavi_domain_model_citaviimporter">
+				<source>Importer</source>
+			</trans-unit>
+			<trans-unit id="tx_nw_citavi_domain_model_citaviimporter.description">
+				<source></source>
+			</trans-unit>
+			<trans-unit id="tx_nw_citavi_domain_model_citavitest">
+				<source>Testview</source>
+			</trans-unit>
+			<trans-unit id="tx_nw_citavi_domain_model_citavitest.description">
+				<source></source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference">
+				<source>Reference</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.citavi_hash">
+				<source>Citavi Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.citavi_id">
+				<source>Citavi Id</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.created_by">
+				<source>Created By</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.created_by_sid">
+				<source>Created By Sid</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.created_on">
+				<source>Created On</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.modified_by">
+				<source>Modified By</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.modified_by_sid">
+				<source>Modified By Sid</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.modified_on">
+				<source>Modified On</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.reference_type">
+				<source>Reference Type</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.parent_reference_type">
+				<source>Parent Reference Type</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.i_s_b_n">
+				<source>I S B N</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.sequence_number">
+				<source>Sequence Number</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.abstract">
+				<source>Abstract</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.abstract_r_t_f">
+				<source>Abstract R T F</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.access_date">
+				<source>Access Date</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.additions">
+				<source>Additions</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.ref_authors">
+				<source>Ref Authors</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.ref_categories">
+				<source>Ref Categories</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.citation_key_update_type">
+				<source>Citation Key Update Type</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.ref_collaborators">
+				<source>Ref Collaborators</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.custom_field1">
+				<source>Custom Field1</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.custom_field2">
+				<source>Custom Field2</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.custom_field3">
+				<source>Custom Field3</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.custom_field4">
+				<source>Custom Field4</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.custom_field5">
+				<source>Custom Field5</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.custom_field6">
+				<source>Custom Field6</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.custom_field7">
+				<source>Custom Field7</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.custom_field8">
+				<source>Custom Field8</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.custom_field9">
+				<source>Custom Field9</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.book_date">
+				<source>Book Date</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.default_location_i_d">
+				<source>Default Location I D</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.edition">
+				<source>Edition</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.ref_editors">
+				<source>Ref Editors</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.evaluation">
+				<source>Evaluation</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.evaluation_r_t_f">
+				<source>Evaluation R T F</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.ref_keywords">
+				<source>Ref Keywords</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.book_language">
+				<source>Book Language</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.book_note">
+				<source>Book Note</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.number">
+				<source>Number</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.number_of_volumes">
+				<source>Number Of Volumes</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.online_address">
+				<source>Online Address</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.ref_organizations">
+				<source>Ref Organizations</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.original_checked_by">
+				<source>Original Checked By</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.original_publication">
+				<source>Original Publication</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.ref_others_involved">
+				<source>Ref Others Involved</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.page_count">
+				<source>Page Count</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.page_range">
+				<source>Page Range</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.parallel_title">
+				<source>Parallel Title</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.ref_periodical">
+				<source>Ref Periodical</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.place_of_publication">
+				<source>Place Of Publication</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.price">
+				<source>Price</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.ref_publishers">
+				<source>Ref Publishers</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.rating">
+				<source>Rating</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.ref_series_title">
+				<source>Ref Series Title</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.short_title">
+				<source>Short Title</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.source_of_bibliographic_information">
+				<source>Source Of Bibliographic Information</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.specific_field1">
+				<source>Specific Field1</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.specific_field2">
+				<source>Specific Field2</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.specific_field4">
+				<source>Specific Field4</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.specific_field7">
+				<source>Specific Field7</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.storage_medium">
+				<source>Storage Medium</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.subtitle">
+				<source>Subtitle</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.table_of_contents">
+				<source>Table Of Contents</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.table_of_contents_r_t_f">
+				<source>Table Of Contents R T F</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.title">
+				<source>Title</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.title_in_other_languages">
+				<source>Title In Other Languages</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.title_supplement">
+				<source>Title Supplement</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.translated_title">
+				<source>Translated Title</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.uniform_title">
+				<source>Uniform Title</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.book_volume">
+				<source>Book Volume</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.book_year">
+				<source>Book Year</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.page_range_start">
+				<source>Page Range Start</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.page_range_end">
+				<source>Page Range End</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.doi">
+				<source>Doi</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.sort_date">
+				<source>Sort Date</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.literaturlist_id">
+				<source>Literaturlist Id</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.attachment">
+				<source>Attachment</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.cover">
+				<source>Cover</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.categories">
+				<source>Categories</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.keywords">
+				<source>Keywords</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.editors">
+				<source>Editors</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.authors">
+				<source>Authors</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.others_involved">
+				<source>Others Involved</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.collaborators">
+				<source>Collaborators</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.organizations">
+				<source>Organizations</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.publishers">
+				<source>Publishers</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.periodicals">
+				<source>Periodicals</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.seriestitles">
+				<source>Seriestitles</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.knowledge_items">
+				<source>Knowledge Items</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.locations">
+				<source>Locations</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.parent_references">
+				<source>Parent References</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_reference.child_references">
+				<source>Child References</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_log">
+				<source>Log</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_log.error">
+				<source>Error</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_log.errortext">
+				<source>Errortext</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_log.func">
+				<source>Func</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_log.logtype">
+				<source>Logtype</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_log.details">
+				<source>Details</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_log.importkey">
+				<source>Importkey</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_category">
+				<source>Category</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_category.citavi_hash">
+				<source>Citavi Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_category.citavi_id">
+				<source>Citavi Id</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_category.created_by">
+				<source>Created By</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_category.created_by_sid">
+				<source>Created By Sid</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_category.created_on">
+				<source>Created On</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_category.modified_by">
+				<source>Modified By</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_category.modified_by_sid">
+				<source>Modified By Sid</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_category.modified_on">
+				<source>Modified On</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_category.title">
+				<source>Title</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_category.description">
+				<source>Description</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_category.literaturlist_id">
+				<source>Literaturlist Id</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_category.parent">
+				<source>Parent</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_categoryhash">
+				<source>Category Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_categoryhash.citavi_hash">
+				<source>Citavi Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_referencehash">
+				<source>Reference Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_referencehash.citavi_hash">
+				<source>Citavi Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_keyword">
+				<source>Keyword</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_keyword.citavi_hash">
+				<source>Citavi Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_keyword.citavi_id">
+				<source>Citavi Id</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_keyword.created_by">
+				<source>Created By</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_keyword.created_by_sid">
+				<source>Created By Sid</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_keyword.created_on">
+				<source>Created On</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_keyword.modified_by">
+				<source>Modified By</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_keyword.modified_by_sid">
+				<source>Modified By Sid</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_keyword.modified_on">
+				<source>Modified On</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_keyword.name">
+				<source>Name</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_keyword.literaturlist_id">
+				<source>Literaturlist Id</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_keywordhash">
+				<source>Keyword Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_keywordhash.citavi_hash">
+				<source>Citavi Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_knowledgeitem">
+				<source>Knowledge Item</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_knowledgeitem.citavi_hash">
+				<source>Citavi Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_knowledgeitem.citavi_id">
+				<source>Citavi Id</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_knowledgeitem.created_by">
+				<source>Created By</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_knowledgeitem.created_by_sid">
+				<source>Created By Sid</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_knowledgeitem.created_on">
+				<source>Created On</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_knowledgeitem.modified_by">
+				<source>Modified By</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_knowledgeitem.modified_by_sid">
+				<source>Modified By Sid</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_knowledgeitem.modified_on">
+				<source>Modified On</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_knowledgeitem.knowledge_item_type">
+				<source>Knowledge Item Type</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_knowledgeitem.quotation_type">
+				<source>Quotation Type</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_knowledgeitem.core_statement">
+				<source>Core Statement</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_knowledgeitem.core_statement_update_type">
+				<source>Core Statement Update Type</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_knowledgeitem.text">
+				<source>Text</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_knowledgeitem.text_r_t_f">
+				<source>Text R T F</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_knowledgeitem.literaturlist_id">
+				<source>Literaturlist Id</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_knowledgeitemhash">
+				<source>Knowledge Item Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_knowledgeitemhash.citavi_hash">
+				<source>Citavi Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_library">
+				<source>Library</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_library.citavi_hash">
+				<source>Citavi Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_library.citavi_id">
+				<source>Citavi Id</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_library.created_by">
+				<source>Created By</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_library.created_by_sid">
+				<source>Created By Sid</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_library.created_on">
+				<source>Created On</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_library.modified_by">
+				<source>Modified By</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_library.modified_by_sid">
+				<source>Modified By Sid</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_library.modified_on">
+				<source>Modified On</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_library.name">
+				<source>Name</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_library.literaturlist_id">
+				<source>Literaturlist Id</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_libraryhash">
+				<source>Library Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_libraryhash.citavi_hash">
+				<source>Citavi Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_location">
+				<source>Location</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_location.citavi_hash">
+				<source>Citavi Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_location.citavi_id">
+				<source>Citavi Id</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_location.created_by">
+				<source>Created By</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_location.created_by_sid">
+				<source>Created By Sid</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_location.created_on">
+				<source>Created On</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_location.modified_by">
+				<source>Modified By</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_location.modified_by_sid">
+				<source>Modified By Sid</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_location.modified_on">
+				<source>Modified On</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_location.address">
+				<source>Address</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_location.notes">
+				<source>Notes</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_location.location_type">
+				<source>Location Type</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_location.mirrors_reference_property_id">
+				<source>Mirrors Reference Property Id</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_location.address_uri">
+				<source>Address Uri</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_location.call_number">
+				<source>Call Number</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_location.literaturlist_id">
+				<source>Literaturlist Id</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_location.librarys">
+				<source>Librarys</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_locationhash">
+				<source>Location Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_locationhash.citavi_hash">
+				<source>Citavi Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_periodical">
+				<source>Periodical</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_periodical.citavi_hash">
+				<source>Citavi Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_periodical.citavi_id">
+				<source>Citavi Id</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_periodical.created_by">
+				<source>Created By</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_periodical.created_by_sid">
+				<source>Created By Sid</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_periodical.created_on">
+				<source>Created On</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_periodical.modified_by">
+				<source>Modified By</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_periodical.modified_by_sid">
+				<source>Modified By Sid</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_periodical.modified_on">
+				<source>Modified On</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_periodical.i_s_s_n">
+				<source>I S S N</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_periodical.name">
+				<source>Name</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_periodical.literaturlist_id">
+				<source>Literaturlist Id</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_periodicalhash">
+				<source>Periodical Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_periodicalhash.citavi_hash">
+				<source>Citavi Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_person">
+				<source>Person</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_person.citavi_hash">
+				<source>Citavi Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_person.citavi_id">
+				<source>Citavi Id</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_person.created_by">
+				<source>Created By</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_person.created_by_sid">
+				<source>Created By Sid</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_person.created_on">
+				<source>Created On</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_person.modified_by">
+				<source>Modified By</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_person.modified_by_sid">
+				<source>Modified By Sid</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_person.modified_on">
+				<source>Modified On</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_person.first_name">
+				<source>First Name</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_person.last_name">
+				<source>Last Name</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_person.middle_name">
+				<source>Middle Name</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_person.abbreviation">
+				<source>Abbreviation</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_person.pref">
+				<source>Pref</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_person.suff">
+				<source>Suff</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_person.sex">
+				<source>Sex</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_person.person_type">
+				<source>Person Type</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_person.literaturlist_id">
+				<source>Literaturlist Id</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_personhash">
+				<source>Person Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_personhash.citavi_hash">
+				<source>Citavi Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_publisher">
+				<source>Publisher</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_publisher.citavi_hash">
+				<source>Citavi Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_publisher.citavi_id">
+				<source>Citavi Id</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_publisher.created_by">
+				<source>Created By</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_publisher.created_by_sid">
+				<source>Created By Sid</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_publisher.created_on">
+				<source>Created On</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_publisher.modified_by">
+				<source>Modified By</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_publisher.modified_by_sid">
+				<source>Modified By Sid</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_publisher.modified_on">
+				<source>Modified On</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_publisher.name">
+				<source>Name</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_publisher.literaturlist_id">
+				<source>Literaturlist Id</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_publisherhash">
+				<source>Publisher Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_publisherhash.citavi_hash">
+				<source>Citavi Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_seriestitle">
+				<source>Seriestitle</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_seriestitle.citavi_hash">
+				<source>Citavi Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_seriestitle.citavi_id">
+				<source>Citavi Id</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_seriestitle.created_by">
+				<source>Created By</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_seriestitle.created_by_sid">
+				<source>Created By Sid</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_seriestitle.created_on">
+				<source>Created On</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_seriestitle.modified_by">
+				<source>Modified By</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_seriestitle.modified_by_sid">
+				<source>Modified By Sid</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_seriestitle.modified_on">
+				<source>Modified On</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_seriestitle.name">
+				<source>Name</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_seriestitle.literaturlist_id">
+				<source>Literaturlist Id</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_seriestitlehash">
+				<source>Seriestitle Hash</source>
+			</trans-unit>
+			<trans-unit id="tx_nwcitavi_domain_model_seriestitlehash.citavi_hash">
+				<source>Citavi Hash</source>
+			</trans-unit>
+      <trans-unit id="task.parseCategories.name">
+				<source>Citavi XML Category parser</source>
+			</trans-unit>
+      <trans-unit id="task.parseCategories.description">
+				<source>This task is a parser for Citavi Categories in XML</source>
+			</trans-unit>
+      <trans-unit id="task.parseKeywords.name">
+				<source>Citavi XML Keyword parser</source>
+			</trans-unit>
+      <trans-unit id="task.parseKeywords.description">
+				<source>This task is a parser for Citavi Keywords in XML</source>
+			</trans-unit>
+      <trans-unit id="task.parseLibraries.name">
+				<source>Citavi XML Library parser</source>
+			</trans-unit>
+      <trans-unit id="task.parseLibraries.description">
+				<source>This task is a parser for Citavi Libraries in XML</source>
+			</trans-unit>
+      <trans-unit id="task.parsePeriodicals.name">
+				<source>Citavi XML Periodical parser</source>
+			</trans-unit>
+      <trans-unit id="task.parsePeriodicals.description">
+				<source>This task is a parser for Citavi Periodicals in XML</source>
+			</trans-unit>
+      <trans-unit id="task.parsePersons.name">
+				<source>Citavi XML Person parser</source>
+			</trans-unit>
+      <trans-unit id="task.parsePersons.description">
+				<source>This task is a parser for Citavi Persons in XML</source>
+			</trans-unit>
+      <trans-unit id="task.parsePublishers.name">
+				<source>Citavi XML Publisher parser</source>
+			</trans-unit>
+      <trans-unit id="task.parsePublishers.description">
+				<source>This task is a parser for Citavi Publishers in XML</source>
+			</trans-unit>
+      <trans-unit id="task.parseSeriestitles.name">
+				<source>Citavi XML Seriestitle parser</source>
+			</trans-unit>
+      <trans-unit id="task.parseSeriestitles.description">
+				<source>This task is a parser for Citavi Seriestitles in XML</source>
+			</trans-unit>
+      <trans-unit id="task.parseKnowledgeitems.name">
+				<source>Citavi XML Knowledgeitem parser</source>
+			</trans-unit>
+      <trans-unit id="task.parseKnowledgeitems.description">
+				<source>This task is a parser for Citavi Knowledgeitems in XML</source>
+			</trans-unit>
+      <trans-unit id="task.parseReferences.name">
+				<source>Citavi XML Reference parser</source>
+			</trans-unit>
+      <trans-unit id="task.parseReferences.description">
+				<source>This task is a parser for Citavi References in XML</source>
+			</trans-unit>
+      <trans-unit id="task.parseLocations.name">
+				<source>Citavi XML Location parser</source>
+			</trans-unit>
+      <trans-unit id="task.parseLocations.description">
+				<source>This task is a parser for Citavi Locations in XML</source>
+			</trans-unit>
+      <trans-unit id="task.parseFiles.name">
+				<source>Citavi XML File parser</source>
+			</trans-unit>
+      <trans-unit id="task.parseFiles.description">
+				<source>This task is a parser for Citavi Files in XML</source>
+			</trans-unit>
+      <trans-unit id="task.parseCleaner.name">
+				<source>Citavi XML Cleaner parser</source>
+			</trans-unit>
+      <trans-unit id="task.parseCleaner.description">
+				<source>This task is a parser for Citavi Cleaner in XML</source>
+			</trans-unit>
+      <!--<trans-unit id="">
+				<source></source>
+			</trans-unit>-->
+		</body>
+	</file>
+</xliff>

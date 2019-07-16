@@ -1,0 +1,50 @@
+plugin.tx_nwcitavi {
+  view {
+    templateRootPaths.0 = EXT:nw_citavi/Resources/Private/Templates/
+    templateRootPaths.1 = {$plugin.tx_nwcitavi.view.templateRootPath}
+    partialRootPaths.0 = EXT:nw_citavi/Resources/Private/Partials/
+    partialRootPaths.1 = {$plugin.tx_nwcitavi.view.partialRootPath}
+    layoutRootPaths.0 = EXT:nw_citavi/Resources/Private/Layouts/
+    layoutRootPaths.1 = {$plugin.tx_nwcitavi.view.layoutRootPath}
+  }
+  persistence {
+    storagePid = {$plugin.tx_nwcitavi.persistence.storagePid}
+    #recursive = 1
+  }
+  features {
+    #skipDefaultArguments = 1
+  }
+  mvc {
+    #callDefaultActionIfActionCantBeResolved = 1
+  }
+  settings {
+    cssCustom = {$plugin.tx_nwcitavi.settings.cssCustom}
+    no_upload = {$plugin.tx_nwcitavi.settings.no_upload}
+    scheduler = {$plugin.tx_nwcitavi.settings.scheduler}
+    pdf.path = {$plugin.tx_nwcitavi.settings.pdf.path}
+    export.path = {$plugin.tx_nwcitavi.settings.export.path}
+    sPid = {$plugin.tx_nwcitavi.settings.sPid}
+    #email = {$plugin.tx_nwcitavi.settings.email}
+    #subject = {$plugin.tx_nwcitavi.settings.subject}
+    fileStoragePid = {$plugin.tx_nwcitavi.settings.fileStoragePid}
+  }
+}
+
+config.tx_extbase {
+	persistence {
+		classes {
+			Netzweber\NwCitavi\Domain\Model\FileReference {
+				mapping {
+					tableName = sys_file_reference
+					columns {
+						uid_local.mapOnProperty = originalFileIdentifier
+					}
+				}
+			}
+		}
+		objects {
+			TYPO3\CMS\Extbase\Domain\Model\FileReference.className = Netzweber\NwCitavi\Domain\Model\FileReference
+		}
+		updateReferenceIndex = 1
+	}
+}

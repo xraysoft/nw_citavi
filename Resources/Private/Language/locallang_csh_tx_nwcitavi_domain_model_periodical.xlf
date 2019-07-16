@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<xliff version="1.0">
+	<file source-language="en" datatype="plaintext" original="messages" date="2018-07-16T10:29:58Z" product-name="nw_citavi">
+		<header/>
+		<body>
+			<trans-unit id="tx_nw_citavi_domain_model_citavilist">
+				<source>List</source>
+			</trans-unit>
+			<trans-unit id="tx_nw_citavi_domain_model_citavilist.description">
+				<source></source>
+			</trans-unit>
+			<trans-unit id="tx_nw_citavi_domain_model_citavidetail">
+				<source>Detail</source>
+			</trans-unit>
+			<trans-unit id="tx_nw_citavi_domain_model_citavidetail.description">
+				<source></source>
+			</trans-unit>
+			<trans-unit id="tx_nw_citavi_domain_model_citaviimporter">
+				<source>Importer</source>
+			</trans-unit>
+			<trans-unit id="tx_nw_citavi_domain_model_citaviimporter.description">
+				<source></source>
+			</trans-unit>
+			<trans-unit id="tx_nw_citavi_domain_model_citavitest">
+				<source>Testview</source>
+			</trans-unit>
+			<trans-unit id="tx_nw_citavi_domain_model_citavitest.description">
+				<source></source>
+			</trans-unit>
+			<trans-unit id="citavi_hash.description">
+				<source>citaviHash</source>
+			</trans-unit>
+			<trans-unit id="citavi_id.description">
+				<source>citaviId</source>
+			</trans-unit>
+			<trans-unit id="created_by.description">
+				<source>createdBy</source>
+			</trans-unit>
+			<trans-unit id="created_by_sid.description">
+				<source>createdBySid</source>
+			</trans-unit>
+			<trans-unit id="created_on.description">
+				<source>createdOn</source>
+			</trans-unit>
+			<trans-unit id="modified_by.description">
+				<source>modifiedBy</source>
+			</trans-unit>
+			<trans-unit id="modified_by_sid.description">
+				<source>modifiedBySid</source>
+			</trans-unit>
+			<trans-unit id="modified_on.description">
+				<source>modifiedOn</source>
+			</trans-unit>
+			<trans-unit id="i_s_s_n.description">
+				<source>iSSN</source>
+			</trans-unit>
+			<trans-unit id="name.description">
+				<source>name</source>
+			</trans-unit>
+			<trans-unit id="literaturlist_id.description">
+				<source>literaturlistId</source>
+			</trans-unit>
+		</body>
+	</file>
+</xliff>
