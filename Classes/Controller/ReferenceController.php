@@ -92,7 +92,8 @@ class ReferenceController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionContro
         $typo3version = \TYPO3\CMS\Core\Utility\VersionNumberUtility::convertVersionStringToArray(\TYPO3\CMS\Core\Utility\VersionNumberUtility::getNumericTypo3Version());        
         if($typo3version['version_main'] == 6) {
           $this->settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi_citavilist.']['settings.'];
-        }        
+        }
+                
         if ($this->settings['no_upload'] == 0) {          
           file_put_contents($this->dir.'/log/upload.txt', time().'|func|'.$_POST['func'].chr(10), FILE_APPEND);
           switch ($_POST['func']) {

@@ -41,12 +41,12 @@ class LibraryRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
   }
 
   public function findAllOptions() {
-    $query = $this->createQuery();
+    /*$query = $this->createQuery();
     $sql = 'SELECT uid, name FROM tx_nwcitavi_domain_model_library WHERE deleted = 0 AND hidden = 0';
     $query->statement($sql);
     $res = $query->execute();
     
-    return $res;
+    return $res;*/
   }
   
   public function findByCitaviId($citaviId) {

@@ -1,6 +1,8 @@
 <?php
 namespace Netzweber\NwCitavi\Domain\Repository;
 
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Database\ConnectionPool;
 
 /***************************************************************
  *
@@ -40,11 +42,80 @@ class PublisherRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
       $this->setDefaultQuerySettings($querySettings);
   }
 
-  public function findAllOptions() {
-    $query = $this->createQuery();
-    $sql = 'SELECT uid, name FROM tx_nwcitavi_domain_model_publisher WHERE deleted = 0 AND hidden = 0';
-    $query->statement($sql);
-    $res = $query->execute();
+  public function findAllOptions($settings = null) {
+    $filterCategories = explode(",", $settings['selectedcategory']);
+    if(is_array($filterCategories)) {
+      if(count($filterCategories) > 1) {
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable('tx_nwcitavi_domain_model_publisher')->createQueryBuilder();
+        $orX = $queryBuilder->expr()->orX();
+        foreach($filterCategories as $filterCategory) {
+          $orX->add($queryBuilder->expr()->eq('mmcategory.uid_foreign', $queryBuilder->createNamedParameter($filterCategory, \PDO::PARAM_INT)));
+        }
+        $queryBuilder
+          ->select('*')
+          ->from('tx_nwcitavi_domain_model_publisher')
+          ->join(
+            'tx_nwcitavi_domain_model_publisher',
+            'tx_nwcitavi_reference_publisher_mm',
+            'mmpublisher',
+            $queryBuilder->expr()->eq('mmpublisher.uid_foreign', 'tx_nwcitavi_domain_model_publisher.uid')
+          )
+          ->join(
+            'mmpublisher',
+            'tx_nwcitavi_reference_category_mm',
+            'mmcategory',
+            $queryBuilder->expr()->eq('mmcategory.uid_local', 'mmpublisher.uid_local'),
+            $filterConstraints
+          )
+          ->where(
+            $orX
+          )
+          ->groupBy('tx_nwcitavi_domain_model_publisher.uid')
+          ->orderBy('tx_nwcitavi_domain_model_publisher.name');
+          
+        $statement = $queryBuilder->execute();
+        $i = 0;
+        while ($row = $statement->fetch()) {
+          $res[$i]['uid'] = $row['uid'];
+          $res[$i]['value'] = $row['name'];
+          $i++;
+        }
+      } else {
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable('tx_nwcitavi_domain_model_publisher')->createQueryBuilder();
+        $queryBuilder
+          ->select('*')
+          ->from('tx_nwcitavi_domain_model_publisher')
+          ->join(
+            'tx_nwcitavi_domain_model_publisher',
+            'tx_nwcitavi_reference_publisher_mm',
+            'mmpublisher',
+            $queryBuilder->expr()->eq('mmpublisher.uid_foreign', 'tx_nwcitavi_domain_model_publisher.uid')
+          )
+          ->join(
+            'mmpublisher',
+            'tx_nwcitavi_reference_category_mm',
+            'mmcategory',
+            $queryBuilder->expr()->eq('mmcategory.uid_local', 'mmpublisher.uid_local')
+          );
+        if($settings['selectedcategory']) {
+          $queryBuilder
+            ->where(
+              $queryBuilder->expr()->eq('mmcategory.uid_foreign', $queryBuilder->createNamedParameter($filterCategories[0], \PDO::PARAM_INT))
+            );
+        }
+        $queryBuilder
+          ->groupBy('tx_nwcitavi_domain_model_publisher.uid')
+          ->orderBy('tx_nwcitavi_domain_model_publisher.name');
+          
+        $statement = $queryBuilder->execute();
+        $i = 0;
+        while ($row = $statement->fetch()) {
+          $res[$i]['uid'] = $row['uid'];
+          $res[$i]['value'] = $row['name'];
+          $i++;
+        }
+      }
+    }
     
     return $res;
   }

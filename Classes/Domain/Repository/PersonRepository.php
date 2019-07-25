@@ -1,6 +1,8 @@
 <?php
 namespace Netzweber\NwCitavi\Domain\Repository;
 
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Database\ConnectionPool;
 
 /***************************************************************
  *
@@ -40,21 +42,82 @@ class PersonRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
       $this->setDefaultQuerySettings($querySettings);
   }
 
-  public function findAllOptions($group = null, $category = null) {
+  public function findAllOptions($group = null, $settings = null) {
+    $filterCategories = explode(",", $settings['selectedcategory']);
+    //\TYPO3\CMS\Core\Utility\DebugUtility::debug($filterCategories, 'Debug: ' . __FILE__ . ' in Line: ' . __LINE__);
     if($group) {
-      $query = $this->createQuery();
-      if($category) {
-        $sql = 'SELECT person.uid, person.full_name FROM tx_nwcitavi_domain_model_person person, tx_nwcitavi_reference_'.$group.'_person_mm mmperson, tx_nwcitavi_reference_category_mm mmcategory WHERE person.deleted = 0 AND person.hidden = 0 AND mmperson.uid_foreign = person.uid AND mmcategory.uid_local = mmperson.uid_local AND mmcategory.uid_foreign = '.$category;
-      } else {
-        $sql = 'SELECT person.uid, person.full_name FROM tx_nwcitavi_domain_model_person person, tx_nwcitavi_reference_'.$group.'_person_mm mmperson, tx_nwcitavi_reference_category_mm mmcategory WHERE person.deleted = 0 AND person.hidden = 0 AND mmperson.uid_foreign = person.uid';
+      if(is_array($filterCategories)) {
+        if(count($filterCategories) > 1) {
+          $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable('tx_nwcitavi_domain_model_person')->createQueryBuilder();
+          $orX = $queryBuilder->expr()->orX();
+          foreach($filterCategories as $filterCategory) {
+            $orX->add($queryBuilder->expr()->eq('mmcategory.uid_foreign', $queryBuilder->createNamedParameter($filterCategory, \PDO::PARAM_INT)));
+          }
+          $queryBuilder
+            ->select('uid', 'first_name', 'last_name', 'middle_name')
+            ->from('tx_nwcitavi_domain_model_person')
+            ->join(
+              'tx_nwcitavi_domain_model_person',
+              'tx_nwcitavi_reference_'.$group.'_person_mm',
+              'mmperson',
+              $queryBuilder->expr()->eq('mmperson.uid_foreign', 'tx_nwcitavi_domain_model_person.uid')
+            )
+            ->join(
+              'mmperson',
+              'tx_nwcitavi_reference_category_mm',
+              'mmcategory',
+              $queryBuilder->expr()->eq('mmcategory.uid_local', 'mmperson.uid_local'),
+              $filterConstraints
+            )
+            ->where(
+              $orX
+            )
+            ->groupBy('tx_nwcitavi_domain_model_person.uid')
+            ->orderBy('tx_nwcitavi_domain_model_person.last_name');
+            
+          $statement = $queryBuilder->execute();
+          $i = 0;
+          while ($row = $statement->fetch()) {
+            $res[$i]['uid'] = $row['uid'];
+            $res[$i]['value'] = $row['last_name'].', '.$row['first_name'].' '.$row['middle_name'];
+            $i++;
+          }
+        } else {
+          $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable('tx_nwcitavi_domain_model_person')->createQueryBuilder();
+          $queryBuilder
+            ->select('*')
+            ->from('tx_nwcitavi_domain_model_person')
+            ->join(
+              'tx_nwcitavi_domain_model_person',
+              'tx_nwcitavi_reference_'.$group.'_person_mm',
+              'mmperson',
+              $queryBuilder->expr()->eq('mmperson.uid_foreign', 'tx_nwcitavi_domain_model_person.uid')
+            )
+            ->join(
+              'mmperson',
+              'tx_nwcitavi_reference_category_mm',
+              'mmcategory',
+              $queryBuilder->expr()->eq('mmcategory.uid_local', 'mmperson.uid_local')
+            );
+          if($settings['selectedcategory']) {
+            $queryBuilder
+              ->where(
+                $queryBuilder->expr()->eq('mmcategory.uid_foreign', $queryBuilder->createNamedParameter($filterCategories[0], \PDO::PARAM_INT))
+              );
+          }
+          $queryBuilder
+            ->groupBy('tx_nwcitavi_domain_model_person.uid')
+            ->orderBy('tx_nwcitavi_domain_model_person.last_name');
+            
+          $statement = $queryBuilder->execute();
+          $i = 0;
+          while ($row = $statement->fetch()) {
+            $res[$i]['uid'] = $row['uid'];
+            $res[$i]['value'] = $row['last_name'].', '.$row['first_name'].' '.$row['middle_name'];
+            $i++;
+          }
+        }
       }
-      $query->statement($sql);
-      $res = $query->execute();
-    } else {
-      $query = $this->createQuery();
-      $sql = 'SELECT uid, full_name FROM tx_nwcitavi_domain_model_person WHERE deleted = 0 AND hidden = 0';
-      $query->statement($sql);
-      $res = $query->execute();
     }
     
     return $res;

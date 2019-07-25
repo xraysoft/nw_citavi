@@ -1,6 +1,8 @@
 <?php
 namespace Netzweber\NwCitavi\Domain\Repository;
 
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Database\ConnectionPool;
 
 /***************************************************************
  *
@@ -40,11 +42,80 @@ class SeriestitleRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
       $this->setDefaultQuerySettings($querySettings);
   }
 
-  public function findAllOptions() {
-    $query = $this->createQuery();
-    $sql = 'SELECT uid, name FROM tx_nwcitavi_domain_model_seriestitle WHERE deleted = 0 AND hidden = 0';
-    $query->statement($sql);
-    $res = $query->execute();
+  public function findAllOptions($settings = null) {
+    $filterCategories = explode(",", $settings['selectedcategory']);
+    if(is_array($filterCategories)) {
+      if(count($filterCategories) > 1) {
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable('tx_nwcitavi_domain_model_seriestitle')->createQueryBuilder();
+        $orX = $queryBuilder->expr()->orX();
+        foreach($filterCategories as $filterCategory) {
+          $orX->add($queryBuilder->expr()->eq('mmcategory.uid_foreign', $queryBuilder->createNamedParameter($filterCategory, \PDO::PARAM_INT)));
+        }
+        $queryBuilder
+          ->select('*')
+          ->from('tx_nwcitavi_domain_model_seriestitle')
+          ->join(
+            'tx_nwcitavi_domain_model_seriestitle',
+            'tx_nwcitavi_reference_seriestitle_mm',
+            'mmseriestitle',
+            $queryBuilder->expr()->eq('mmseriestitle.uid_foreign', 'tx_nwcitavi_domain_model_seriestitle.uid')
+          )
+          ->join(
+            'mmseriestitle',
+            'tx_nwcitavi_reference_category_mm',
+            'mmcategory',
+            $queryBuilder->expr()->eq('mmcategory.uid_local', 'mmseriestitle.uid_local'),
+            $filterConstraints
+          )
+          ->where(
+            $orX
+          )
+          ->groupBy('tx_nwcitavi_domain_model_seriestitle.uid')
+          ->orderBy('tx_nwcitavi_domain_model_seriestitle.name');
+          
+        $statement = $queryBuilder->execute();
+        $i = 0;
+        while ($row = $statement->fetch()) {
+          $res[$i]['uid'] = $row['uid'];
+          $res[$i]['value'] = $row['name'];
+          $i++;
+        }
+      } else {
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable('tx_nwcitavi_domain_model_seriestitle')->createQueryBuilder();
+        $queryBuilder
+          ->select('*')
+          ->from('tx_nwcitavi_domain_model_seriestitle')
+          ->join(
+            'tx_nwcitavi_domain_model_seriestitle',
+            'tx_nwcitavi_reference_seriestitle_mm',
+            'mmseriestitle',
+            $queryBuilder->expr()->eq('mmseriestitle.uid_foreign', 'tx_nwcitavi_domain_model_seriestitle.uid')
+          )
+          ->join(
+            'mmseriestitle',
+            'tx_nwcitavi_reference_category_mm',
+            'mmcategory',
+            $queryBuilder->expr()->eq('mmcategory.uid_local', 'mmseriestitle.uid_local')
+          );
+        if($settings['selectedcategory']) {
+          $queryBuilder
+            ->where(
+              $queryBuilder->expr()->eq('mmcategory.uid_foreign', $queryBuilder->createNamedParameter($filterCategories[0], \PDO::PARAM_INT))
+            );
+        }
+        $queryBuilder
+          ->groupBy('tx_nwcitavi_domain_model_seriestitle.uid')
+          ->orderBy('tx_nwcitavi_domain_model_seriestitle.name');
+          
+        $statement = $queryBuilder->execute();
+        $i = 0;
+        while ($row = $statement->fetch()) {
+          $res[$i]['uid'] = $row['uid'];
+          $res[$i]['value'] = $row['name'];
+          $i++;
+        }
+      }
+    }
     
     return $res;
   }

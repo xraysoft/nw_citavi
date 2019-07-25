@@ -1,6 +1,8 @@
 <?php
 namespace Netzweber\NwCitavi\Domain\Repository;
 
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Database\ConnectionPool;
 
 /***************************************************************
  *
@@ -41,10 +43,79 @@ class KnowledgeItemRepository extends \TYPO3\CMS\Extbase\Persistence\Repository 
   }
 
   public function findAllOptions() {
-    $query = $this->createQuery();
-    $sql = 'SELECT uid, text FROM tx_nwcitavi_domain_model_knowledgeitem WHERE deleted = 0 AND hidden = 0';
-    $query->statement($sql);
-    $res = $query->execute();
+    $filterCategories = explode(",", $settings['selectedcategory']);
+    if(is_array($filterCategories)) {
+      if(count($filterCategories) > 1) {
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable('tx_nwcitavi_domain_model_knowledgeitem')->createQueryBuilder();
+        $orX = $queryBuilder->expr()->orX();
+        foreach($filterCategories as $filterCategory) {
+          $orX->add($queryBuilder->expr()->eq('mmcategory.uid_foreign', $queryBuilder->createNamedParameter($filterCategory, \PDO::PARAM_INT)));
+        }
+        $queryBuilder
+          ->select('*')
+          ->from('tx_nwcitavi_domain_model_knowledgeitem')
+          ->join(
+            'tx_nwcitavi_domain_model_knowledgeitem',
+            'tx_nwcitavi_reference_knowledgeitem_mm',
+            'mmknowledgeitem',
+            $queryBuilder->expr()->eq('mmknowledgeitem.uid_foreign', 'tx_nwcitavi_domain_model_knowledgeitem.uid')
+          )
+          ->join(
+            'mmknowledgeitem',
+            'tx_nwcitavi_reference_category_mm',
+            'mmcategory',
+            $queryBuilder->expr()->eq('mmcategory.uid_local', 'mmknowledgeitem.uid_local'),
+            $filterConstraints
+          )
+          ->where(
+            $orX
+          )
+          ->groupBy('tx_nwcitavi_domain_model_knowledgeitem.uid')
+          ->orderBy('tx_nwcitavi_domain_model_knowledgeitem.text');
+          
+        $statement = $queryBuilder->execute();
+        $i = 0;
+        while ($row = $statement->fetch()) {
+          $res[$i]['uid'] = $row['uid'];
+          $res[$i]['value'] = $row['text'];
+          $i++;
+        }
+      } else {
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable('tx_nwcitavi_domain_model_knowledgeitem')->createQueryBuilder();
+        $queryBuilder
+          ->select('*')
+          ->from('tx_nwcitavi_domain_model_knowledgeitem')
+          ->join(
+            'tx_nwcitavi_domain_model_knowledgeitem',
+            'tx_nwcitavi_reference_knowledgeitem_mm',
+            'mmknowledgeitem',
+            $queryBuilder->expr()->eq('mmknowledgeitem.uid_foreign', 'tx_nwcitavi_domain_model_knowledgeitem.uid')
+          )
+          ->join(
+            'mmknowledgeitem',
+            'tx_nwcitavi_reference_category_mm',
+            'mmcategory',
+            $queryBuilder->expr()->eq('mmcategory.uid_local', 'mmknowledgeitem.uid_local')
+          );
+        if($settings['selectedcategory']) {
+          $queryBuilder
+            ->where(
+              $queryBuilder->expr()->eq('mmcategory.uid_foreign', $queryBuilder->createNamedParameter($filterCategories[0], \PDO::PARAM_INT))
+            );
+        }
+        $queryBuilder
+          ->groupBy('tx_nwcitavi_domain_model_knowledgeitem.uid')
+          ->orderBy('tx_nwcitavi_domain_model_knowledgeitem.text');
+          
+        $statement = $queryBuilder->execute();
+        $i = 0;
+        while ($row = $statement->fetch()) {
+          $res[$i]['uid'] = $row['uid'];
+          $res[$i]['value'] = $row['text'];
+          $i++;
+        }
+      }
+    }
     
     return $res;
   }
