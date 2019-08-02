@@ -845,19 +845,31 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
             $newReference->setParentReferenceType(($this->parentReferenceType) ? $this->parentReferenceType : '');
             $newReference->setCreatedBy(($ref['@attributes']['CreatedBy']) ? $ref['@attributes']['CreatedBy'] : '0');
             $newReference->setCreatedBySid(($ref['@attributes']['CreatedBySid']) ? $ref['@attributes']['CreatedBySid'] : '0');
-            $createdOn = new \DateTime(($ref['@attributes']['CreatedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['CreatedOn']) : '1000-01-01 00:00:00');
-            $newReference->setCreatedOn(($createdOn->getTimestamp()) ? $createdOn->getTimestamp() : 0);
+            try {
+              $createdOn = new \DateTime(($ref['@attributes']['CreatedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['CreatedOn']) : '1000-01-01 00:00:00');
+              $newReference->setCreatedOn(($createdOn->getTimestamp()) ? $createdOn->getTimestamp() : 0);
+            } catch (Exception $e) {
+              $this->logRepository->addLog(1, 'DateTime [CreatedOn] "'.$ref['@attributes']['CreatedOn'].'" could not be parsed for Reference '.$ref['@attributes']['ID'].'. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
+            }
             $newReference->setISBN(($ref['@attributes']['ISBN']) ? $ref['@attributes']['ISBN'] : '');
             $newReference->setModifiedBy(($ref['@attributes']['ModifiedBy']) ? $ref['@attributes']['ModifiedBy'] : '0');
             $newReference->setModifiedBySid(($ref['@attributes']['ModifiedBySid']) ? $ref['@attributes']['ModifiedBySid'] : '0');
-            $modifiedOn = new \DateTime(($ref['@attributes']['ModifiedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['ModifiedOn']) : '1000-01-01 00:00:00');
-            $newReference->setModifiedOn(($modifiedOn->getTimestamp()) ? $modifiedOn->getTimestamp() : 0);
+            try {
+              $modifiedOn = new \DateTime(($ref['@attributes']['ModifiedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['ModifiedOn']) : '1000-01-01 00:00:00');
+              $newReference->setModifiedOn(($modifiedOn->getTimestamp()) ? $modifiedOn->getTimestamp() : 0);
+            } catch (Exception $e) {
+              $this->logRepository->addLog(1, 'DateTime [ModifiedOn] "'.$ref['@attributes']['ModifiedOn'].'" could not be parsed for Reference '.$ref['@attributes']['ID'].'. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
+            }
             $newReference->setSequenceNumber(($ref['@attributes']['SequenceNumber']) ? $ref['@attributes']['SequenceNumber'] : '0');
             $newReference->setAbstract(($ref['Abstract']) ? $ref['Abstract'] : '');
             $newReference->setAbstractRTF(($ref['AbstractRTF']) ? $ref['AbstractRTF'] : '');
             if($ref['AccessDate']) {
-              $accessDate = new \DateTime(($ref['AccessDate']) ? $this->setDatetimeByCitaviDate($ref['AccessDate']) : '1000-01-01 00:00:00');
-              $newReference->setAccessDate(($accessDate->getTimestamp()) ? $accessDate->getTimestamp() : 0);
+              try {
+                $accessDate = new \DateTime(($ref['AccessDate']) ? $this->setDatetimeByCitaviDate($ref['AccessDate']) : '1000-01-01 00:00:00');
+                $newReference->setAccessDate(($accessDate->getTimestamp()) ? $accessDate->getTimestamp() : 0);
+              } catch (Exception $e) {
+                $this->logRepository->addLog(1, 'DateTime [AccessDate] "'.$ref['AccessDate'].'" could not be parsed for Reference '.$ref['@attributes']['ID'].'. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
+              }              
             }
             $newReference->setAdditions(($ref['Additions']) ? $ref['Additions'] : '');
             $newReference->setRefAuthors(($ref['Authors']) ? $ref['Authors'] : '');
