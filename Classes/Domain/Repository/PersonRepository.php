@@ -43,6 +43,7 @@ class PersonRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
   }
 
   public function findAllOptions($group = null, $settings = null) {
+    
     if(!empty($settings['selectedcategory'])) {
       $filterCategories = explode(",", $settings['selectedcategory']);
     }
@@ -91,7 +92,7 @@ class PersonRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
         }
       }
       $queryBuilder
-        ->select('*')
+        ->select('tx_nwcitavi_domain_model_person.uid','last_name','first_name','middle_name')
         ->from('tx_nwcitavi_domain_model_person')
         ->join(
           'tx_nwcitavi_domain_model_person',

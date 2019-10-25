@@ -90,7 +90,7 @@ class PublisherRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
       }
     }
     $queryBuilder
-      ->select('*')
+      ->select('tx_nwcitavi_domain_model_publisher.uid','name')
       ->from('tx_nwcitavi_domain_model_publisher')
       ->join(
         'tx_nwcitavi_domain_model_publisher',

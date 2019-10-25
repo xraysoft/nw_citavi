@@ -1469,6 +1469,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_publisher', 'tx_nwcitavi_domain_model_publisherhash', $settings);
       $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_seriestitle', 'tx_nwcitavi_domain_model_seriestitlehash', $settings);
       $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_knowledgeitem', 'tx_nwcitavi_domain_model_knowledgeitemhash', $settings);
+      $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_category', 'tx_nwcitavi_domain_model_categoryhash', $settings);
     }
     
     public function deletedDoubleDatabaseColumns($t) {
@@ -2887,8 +2888,9 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $query->setLimit((int)$settings['pagelimit']);
         $query->setOffset($page);
       }
+      //\TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump($this->getOrderings($settings));
       
-    	return $query->execute();  
+      return $query->execute();  
     }
     
     public function numAllByFilter($settings) {    

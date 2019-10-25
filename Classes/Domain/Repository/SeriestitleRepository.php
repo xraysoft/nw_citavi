@@ -90,7 +90,7 @@ class SeriestitleRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
       }
     }
     $queryBuilder
-      ->select('*')
+      ->select('tx_nwcitavi_domain_model_seriestitle.uid','name')
       ->from('tx_nwcitavi_domain_model_seriestitle')
       ->join(
         'tx_nwcitavi_domain_model_seriestitle',

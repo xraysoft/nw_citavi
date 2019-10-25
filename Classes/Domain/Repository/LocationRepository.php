@@ -90,7 +90,7 @@ class LocationRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
       }
     }
     $queryBuilder
-      ->select('*')
+      ->select('uid','address')
       ->from('tx_nwcitavi_domain_model_location')
       ->join(
         'tx_nwcitavi_domain_model_location',

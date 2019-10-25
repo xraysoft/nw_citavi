@@ -90,7 +90,7 @@ class KeywordRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
       }
     }
     $queryBuilder
-      ->select('*')
+      ->select('uid', 'name')
       ->from('tx_nwcitavi_domain_model_keyword')
       ->join(
         'tx_nwcitavi_domain_model_keyword',

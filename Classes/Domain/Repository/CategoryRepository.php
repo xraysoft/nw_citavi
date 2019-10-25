@@ -42,15 +42,16 @@ class CategoryRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
       $this->setDefaultQuerySettings($querySettings);
   }
   
-  public function findAllOptions() {
+  public function findAllOptions($settings) {
+    //\TYPO3\CMS\Core\Utility\DebugUtility::debug($settings, 'Debug: ' . __FILE__ . ' in Line: ' . __LINE__);
     if(!empty($settings['selectedcategory'])) {
       $filterCategories = explode(",", $settings['selectedcategory']);
     }
     if(!empty($settings['selectedauthor'])) {
       $filterAuthors = explode(",", $settings['selectedauthor']);
     }
-    if(!empty($settings['selectedcategory'])) {
-      $filterPublishers = explode(",", $settings['selectedcategory']);
+    if(!empty($settings['selectedpublisher'])) {
+      $filterPublishers = explode(",", $settings['selectedpublisher']);
     }
     if(!empty($settings['selectedkeyword'])) {
       $filterKeywords = explode(",", $settings['selectedkeyword']);
@@ -90,21 +91,16 @@ class CategoryRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
       }
     }
     $queryBuilder
-      ->select('*')
-      ->from('tx_nwcitavi_domain_model_category')
-      ->join(
-        'tx_nwcitavi_domain_model_category',
-        'tx_nwcitavi_reference_category_mm',
-        'mmcategory',
-        $queryBuilder->expr()->eq('mmcategory.uid_foreign', 'tx_nwcitavi_domain_model_category.uid')
-      );
+      ->select('category.uid', 'category.title')
+      ->from('tx_nwcitavi_domain_model_category', 'category');
     if(is_array($filterCategories)) {
       $queryBuilder
+        
         ->join(
+          'category',
+          'tx_nwcitavi_category_category_mm',
           'mmcategory',
-          'tx_nwcitavi_reference_category_mm',
-          'mmcategory',
-          $queryBuilder->expr()->eq('mmcategory.uid_local', 'mmcategory.uid_local')
+          $queryBuilder->expr()->eq('mmcategory.uid_local', 'category.uid')
         )
         ->where(
           $orXCategory
@@ -126,9 +122,9 @@ class CategoryRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
       $queryBuilder
         ->join(
           'mmcategory',
-          'tx_nwcitavi_reference_category_mm',
-          'mmcategory',
-          $queryBuilder->expr()->eq('mmcategory.uid_local', 'mmcategory.uid_local')
+          'tx_nwcitavi_reference_publisher_mm',
+          'mmpublisher',
+          $queryBuilder->expr()->eq('mmpublisher.uid_local', 'mmcategory.uid_local')
         )
         ->where(
           $orXPublisher
@@ -159,8 +155,10 @@ class CategoryRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
         );
     }
     $queryBuilder
-      ->groupBy('tx_nwcitavi_domain_model_category.uid')
-      ->orderBy('tx_nwcitavi_domain_model_category.title');
+      ->groupBy('category.uid')
+      ->orderBy('category.title');
+
+    //\TYPO3\CMS\Core\Utility\DebugUtility::debug($queryBuilder->getSQL(), 'Debug: ' . __FILE__ . ' in Line: ' . __LINE__);
       
     $statement = $queryBuilder->execute();
     $i = 0;
