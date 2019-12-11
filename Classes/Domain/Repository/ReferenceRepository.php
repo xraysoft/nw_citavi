@@ -86,14 +86,53 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
             file_put_contents($this->dir.'/log/upload.txt', 'file name|'.$_FILES['file']['name'].chr(13).chr(10), FILE_APPEND);
             $this->fileProcessor = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Utility\\File\\ExtendedFileUtility');
        
-      		  $fileName = $this->fileProcessor->getUniqueName(
-      			  $_FILES['file']['name'],
-              $this->dir
+      		$fileName = $this->fileProcessor->getUniqueName(
+                $_FILES['file']['name'],
+                $this->dir
             );
             
             $upload = \TYPO3\CMS\Core\Utility\GeneralUtility::upload_copy_move(
               $_FILES['file']['tmp_name'],
               $fileName);
+              
+            $resourceFactory = \TYPO3\CMS\Core\Resource\ResourceFactory::getInstance();
+            $defaultStorage = $resourceFactory->getDefaultStorage();
+            $folder = $defaultStorage->getFolder('/user_upload/citavi_upload/');
+            $files = $defaultStorage->getFilesInFolder($folder);
+            if(is_array($files)) {
+              foreach($files as $file) {
+                $thisFile = $file->getProperties();
+                if($thisFile['extension'] === 'xml') {
+                  $folder2 = $defaultStorage->getFolder('/user_upload/citavi_upload/backup/');
+                  $files2 = $defaultStorage->getFilesInFolder($folder2);
+                  $uploaddir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+                  $backupdir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/backup/');
+                  if(is_array($files2)) {
+                    $numFiles = count($files2);
+                    if($numFiles < 10) {
+                      // Kopiere die neue Datei in den Ordner
+                      $upload = \TYPO3\CMS\Core\Utility\GeneralUtility::upload_copy_move(
+                        $uploaddir.$thisFile['name'],
+                        $backupdir.time().'_'.$thisFile['name']);
+                    } else {
+                      // Lösche die älteste Datei
+                      $i = 0;
+                      foreach($files2 as $file2) {
+                        if($i == 0) {
+                          $thisFile2 = $file2->getProperties();
+                          unlink($backupdir.$thisFile2['name']);  
+                        }
+                        $i++;                    
+                      }
+                      // Kopiere die neue Datei in den Ordner
+                      $upload = \TYPO3\CMS\Core\Utility\GeneralUtility::upload_copy_move(
+                        $uploaddir.$thisFile['name'],
+                        $backupdir.time().'_'.$thisFile['name']);
+                    }
+                  }
+                }    
+              }
+            }
               
             $zip = new \ZipArchive;
             if ($zip->open($fileName) === TRUE) {
@@ -2888,7 +2927,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $query->setLimit((int)$settings['pagelimit']);
         $query->setOffset($page);
       }
-      //\TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump($this->getOrderings($settings));
+      \TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump($this->getOrderings($settings));
       
       return $query->execute();  
     }
