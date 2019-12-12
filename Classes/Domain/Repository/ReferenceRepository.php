@@ -2927,7 +2927,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $query->setLimit((int)$settings['pagelimit']);
         $query->setOffset($page);
       }
-      \TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump($this->getOrderings($settings));
+      //\TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump($this->getOrderings($settings));
       
       return $query->execute();  
     }
