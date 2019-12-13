@@ -95,6 +95,20 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $_FILES['file']['tmp_name'],
               $fileName);
               
+            $zip = new \ZipArchive;
+            if ($zip->open($fileName) === TRUE) {
+              $res = $zip->extractTo($this->dir);
+              $zip->close();
+              if($res) {
+                unlink($fileName);
+              }
+            } else {
+              $statusCodeText = $this->getStatusCodeText(418);
+              $logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqid.'', '[Citavi XML Upload]: Upload was terminated.', ''.$_POST['import_key'].'', $settings['sPid']);
+              $this->getStatusCode(418);
+              file_put_contents($this->dir.'/log/upload.txt', 'error|418'.chr(13).chr(10), FILE_APPEND);
+            }
+              
             $resourceFactory = \TYPO3\CMS\Core\Resource\ResourceFactory::getInstance();
             $defaultStorage = $resourceFactory->getDefaultStorage();
             $folder = $defaultStorage->getFolder('/user_upload/citavi_upload/');
@@ -114,6 +128,8 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                       $upload = \TYPO3\CMS\Core\Utility\GeneralUtility::upload_copy_move(
                         $uploaddir.$thisFile['name'],
                         $backupdir.time().'_'.$thisFile['name']);
+                        
+                      return 1;
                     } else {
                       // Lösche die älteste Datei
                       $i = 0;
@@ -128,25 +144,12 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                       $upload = \TYPO3\CMS\Core\Utility\GeneralUtility::upload_copy_move(
                         $uploaddir.$thisFile['name'],
                         $backupdir.time().'_'.$thisFile['name']);
+                        
+                      return 1;
                     }
                   }
                 }    
               }
-            }
-              
-            $zip = new \ZipArchive;
-            if ($zip->open($fileName) === TRUE) {
-              $res = $zip->extractTo($this->dir);
-              $zip->close();
-              if($res) {
-                unlink($fileName);
-                return 1;
-              }
-            } else {
-              $statusCodeText = $this->getStatusCodeText(418);
-              $logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqid.'', '[Citavi XML Upload]: Upload was terminated.', ''.$_POST['import_key'].'', $settings['sPid']);
-              $this->getStatusCode(418);
-              file_put_contents($this->dir.'/log/upload.txt', 'error|418'.chr(13).chr(10), FILE_APPEND);
             }
           } else {
             $statusCodeText = $this->getStatusCodeText(419);
@@ -3612,36 +3615,6 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         exit;
       }
     }
-  
-    /*public function importFile($uniqid) {
-      $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload');
-      file_put_contents($this->dir.'/log/import.txt', '$_FILES: '.serialize($_FILES), FILE_APPEND);
-      file_put_contents($this->dir.'/log/import.txt', '$_POST: '.serialize($_POST), FILE_APPEND);
-      $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/files/');
-      if(is_writeable($this->dir)) {
-        if ($_FILES['file'] && $_POST['import_key']) {
-    		  $basicFileFunctions = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('t3lib_basicFileFunctions');
-          $userfile_name = $_FILES['file']['tmp_name'];
-          $userfile_extn = substr($userfile_name, strrpos($userfile_name, '.')+1);
-          $path_parts = pathinfo($_FILES['file']['tmp_name']);
-          $extension = $path_parts['extension'];
-             
-          return \TYPO3\CMS\Core\Utility\GeneralUtility::upload_copy_move(
-            $_FILES['file']['tmp_name'],
-            $this->dir.$_POST['referenceId'].'.jpg');
-        } else {
-          $statusCodeText = $this->getStatusCodeText(417);
-          $this->logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqid.'', '[Citavi File Upload]: Upload was terminated.', ''.$_POST['import_key'].'');
-          $this->getStatusCode(417);
-          exit;
-        } 
-      } else {
-        $statusCodeText = $this->getStatusCodeText(432);
-        $this->logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqid.'', '[Citavi File Upload]: Upload was terminated.', ''.$_POST['import_key'].'');
-        $this->getStatusCode(432);
-        exit;
-      }
-    }*/
     
     public function findAllReferenceTypOptions() {
       $res = $GLOBALS['TYPO3_DB']->exec_SELECTquery(
