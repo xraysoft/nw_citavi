@@ -1492,7 +1492,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       $persistenceManager->persistAll();
     }
     
-    public function compareHashData() {
+    public function compareHashData($settings) {
       $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_reference');
       $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_keyword');
       $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_library');
@@ -2832,7 +2832,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
             $taskString = file_get_contents ( $this->dir.'/task.txt' );
             $taskCols = explode("|", $taskString);
             if((int)$taskCols[0] == 11) {
-              $this->compareHashData();
+              $this->compareHashData($settings);
               
               unlink($this->dir.'/scheduler.txt');
               
