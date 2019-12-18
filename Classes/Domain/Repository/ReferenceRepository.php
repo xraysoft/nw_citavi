@@ -828,16 +828,6 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
             'pid' => $pid,
         ]);
       $res = $queryBuilder->execute();
-      /*$objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-      $this->hashrepository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\'.$repo);    
-      
-      $newModel = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Model\\'.$model);
-      $newModel->setPid($pid);    
-      $newModel->setCitaviHash($hash);
-      $this->hashrepository->add($newModel);*/
-      
-      //$persistenceManager = $this->objectManager->get("TYPO3\\CMS\\Extbase\\Persistence\\Generic\\PersistenceManager");
-      //$persistenceManager->persistAll();
     }
     
     public function columnExists($repo, $citaviId, $table) {
