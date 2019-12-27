@@ -897,8 +897,9 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
             $newReference->setAbstractRTF(($ref['AbstractRTF']) ? $ref['AbstractRTF'] : '');
             if($ref['AccessDate']) {
               try {
-                $accessDate = new \DateTime(($ref['AccessDate']) ? $this->setDatetimeByCitaviDate($ref['AccessDate']) : '1000-01-01 00:00:00');
-                $newReference->setAccessDate(($accessDate->getTimestamp()) ? $accessDate->getTimestamp() : 0);
+                /*$accessDate = new \DateTime(($ref['AccessDate']) ? $this->setDatetimeByCitaviDate($ref['AccessDate']) : '1000-01-01 00:00:00');
+                $newReference->setAccessDate(($accessDate->getTimestamp()) ? $accessDate->getTimestamp() : 0);*/
+                $newReference->setAccessDate($ref['AccessDate']);
               } catch (Exception $e) {
                 $this->logRepository->addLog(1, 'DateTime [AccessDate] "'.$ref['AccessDate'].'" could not be parsed for Reference '.$ref['@attributes']['ID'].'. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
               }              
@@ -1436,22 +1437,24 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       $refSql = 'SELECT * FROM tx_nwcitavi_domain_model_reference WHERE citavi_id LIKE \''.$ref['@attributes']['ID'].'\'';
       $refQuery->statement($refSql);
       $refResult = $refQuery->execute();
-      $updateReference = $refResult[0];
-      
-      $locationQuery = $locationRepository->createQuery();
-      $locationSql = 'SELECT * FROM tx_nwcitavi_domain_model_location WHERE citavi_id LIKE \''.$locationId.'\'';
-      $locationQuery->statement($locationSql);
-      $locationResult = $locationQuery->execute();
-      $objectStorage = new \TYPO3\CMS\Extbase\Persistence\ObjectStorage;
-      foreach($locationResult as $obj) {
-        $objectStorage->attach($obj);
+      if(isset($refResult[0])) {
+        $updateReference = $refResult[0];
+        
+        $locationQuery = $locationRepository->createQuery();
+        $locationSql = 'SELECT * FROM tx_nwcitavi_domain_model_location WHERE citavi_id LIKE \''.$locationId.'\'';
+        $locationQuery->statement($locationSql);
+        $locationResult = $locationQuery->execute();
+        $objectStorage = new \TYPO3\CMS\Extbase\Persistence\ObjectStorage;
+        foreach($locationResult as $obj) {
+          $objectStorage->attach($obj);
+        }
+        
+        $updateReference->setLocations($objectStorage);
+        $this->update($updateReference);
+        
+        $persistenceManager = $this->objectManager->get("TYPO3\\CMS\\Extbase\\Persistence\\Generic\\PersistenceManager");
+        $persistenceManager->persistAll();
       }
-      
-      $updateReference->setLocations($objectStorage);
-      $this->update($updateReference);
-      
-      $persistenceManager = $this->objectManager->get("TYPO3\\CMS\\Extbase\\Persistence\\Generic\\PersistenceManager");
-      $persistenceManager->persistAll();
     }
     
     public function updateLocationLibrary($locationId, $libraryId) {
