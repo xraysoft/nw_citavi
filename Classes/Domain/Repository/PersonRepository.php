@@ -164,7 +164,7 @@ class PersonRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
         ->groupBy('tx_nwcitavi_domain_model_person.uid')
         ->orderBy('tx_nwcitavi_domain_model_person.last_name');
       
-      \TYPO3\CMS\Core\Utility\DebugUtility::debug($queryBuilder->getSQL(), 'Debug: ' . __FILE__ . ' in Line: ' . __LINE__);
+      //\TYPO3\CMS\Core\Utility\DebugUtility::debug($queryBuilder->getSQL(), 'Debug: ' . __FILE__ . ' in Line: ' . __LINE__);
         
       $statement = $queryBuilder->execute();
       $i = 0;

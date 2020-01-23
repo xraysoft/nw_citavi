@@ -75,7 +75,7 @@ class CategoryRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
     if(is_array($filterPublishers)) {
       $orXPublisher = $queryBuilder->expr()->orX();
       foreach($filterPublishers as $filterPublisher) {
-        $orXPublisher->add($queryBuilder->expr()->eq('mmcategory.uid_foreign', $queryBuilder->createNamedParameter($filterPublisher, \PDO::PARAM_INT)));
+        $orXPublisher->add($queryBuilder->expr()->eq('mmpublisher.uid_foreign', $queryBuilder->createNamedParameter($filterPublisher, \PDO::PARAM_INT)));
       }
     }
     if(is_array($filterKeywords)) {
@@ -95,7 +95,6 @@ class CategoryRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
       ->from('tx_nwcitavi_domain_model_category', 'category');
     if(is_array($filterCategories)) {
       $queryBuilder
-        
         ->join(
           'category',
           'tx_nwcitavi_category_category_mm',
@@ -109,10 +108,10 @@ class CategoryRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
     if(is_array($filterAuthors)) {
       $queryBuilder
         ->join(
-          'mmcategory',
+          'category',
           'tx_nwcitavi_reference_authors_category_mm',
           'mmauthor',
-          $queryBuilder->expr()->eq('mmauthor.uid_local', 'mmcategory.uid_local')
+          $queryBuilder->expr()->eq('mmauthor.uid_local', 'category.uid')
         )
         ->where(
           $orXAuthor
@@ -121,10 +120,10 @@ class CategoryRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
     if(is_array($filterPublishers)) {
       $queryBuilder
         ->join(
-          'mmcategory',
+          'category',
           'tx_nwcitavi_reference_publisher_mm',
           'mmpublisher',
-          $queryBuilder->expr()->eq('mmpublisher.uid_local', 'mmcategory.uid_local')
+          $queryBuilder->expr()->eq('mmpublisher.uid_local', 'category.uid')
         )
         ->where(
           $orXPublisher
@@ -133,10 +132,10 @@ class CategoryRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
     if(is_array($filterKeywords)) {
       $queryBuilder
         ->join(
-          'mmcategory',
+          'category',
           'tx_nwcitavi_reference_keyword_mm',
           'mmkeyword',
-          $queryBuilder->expr()->eq('mmkeyword.uid_local', 'mmcategory.uid_local')
+          $queryBuilder->expr()->eq('mmkeyword.uid_local', 'category.uid')
         )
         ->where(
           $orXPublisher
@@ -145,10 +144,10 @@ class CategoryRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
     if(is_array($filterReferencetypes)) {
       $queryBuilder
         ->join(
-          'mmcategory',
+          'category',
           'tx_nwcitavi_domain_model_reference',
           'references',
-          $queryBuilder->expr()->eq('references.uid', 'mmcategory.uid_local')
+          $queryBuilder->expr()->eq('references.uid', 'category.uid')
         )
         ->where(
           $orXReference

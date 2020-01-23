@@ -518,6 +518,9 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                     case 'Thesis';
                       $this->sortDate = $ref['Date'];
                       break;
+                    case 'InternetDocument';
+                      $this->sortDate = $ref['Year'];
+                      break;
                     default:
                       $this->sortDate = $ref['Date'];
                   }
@@ -2480,6 +2483,9 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                         break;
                       case 'Thesis';
                         $this->sortDate = $ref['Date'];
+                        break;
+                      case 'InternetDocument';
+                        $this->sortDate = $ref['Year'];
                         break;
                       default:
                         $this->sortDate = $ref['Date'];
