@@ -1027,6 +1027,14 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
             $newReference->setPageRangeStart(($ref['PageRange']['@attributes']['StartPage']) ? $ref['PageRange']['@attributes']['StartPage'] : '');
             $newReference->setPageRangeEnd(($ref['PageRange']['@attributes']['EndPage']) ? $ref['PageRange']['@attributes']['EndPage'] : '');
             $newReference->setDoi(($ref['@attributes']['Doi']) ? $ref['@attributes']['Doi'] : '0');
+            $sortDateParts = explode(".", $this->sortDate);
+            if(count($sortDateParts)>1) {
+              foreach($sortDateParts as $part) {
+                if(strlen($part)==4) {
+                  $this->sortDate = $part;  
+                }
+              }  
+            }
             $newReference->setSortDate(($this->sortDate) ? $this->sortDate : '');
             $newReference->setTxExtbaseType('Tx_NwCitaviFe_Reference');
             if($ref['ParentReferenceID'] != '') {
