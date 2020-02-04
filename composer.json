@@ -25,7 +25,7 @@
 	},
 	"autoload": {
 		"psr-4": {
-			"Netzweber\\NwCitavi\\": "Classes"
+			"Netzweber\\NwCitavi\\": "typo3conf/ext/nw_citavi/Classes"
 		}
 	}
 }
