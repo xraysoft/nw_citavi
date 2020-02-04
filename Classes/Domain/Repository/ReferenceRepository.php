@@ -2,7 +2,10 @@
 namespace Netzweber\NwCitavi\Domain\Repository;
 
 use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\Utility\DebugUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Extbase\Persistence\QueryInterface;
+use TYPO3\CMS\Extbase\Utility\DebuggerUtility;
 
 /***
  *
@@ -29,16 +32,16 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
   	 * @inject
   	 */
   	protected $logRepository = NULL;
-    
+
     protected $hashrepository = NULL;
-    
+
     /**
      * @var array
      */
     protected $defaultOrderings = array(
-        'sortDate' => \TYPO3\CMS\Extbase\Persistence\QueryInterface::ORDER_DESCENDING
+        'sortDate' => QueryInterface::ORDER_DESCENDING
     );
-    
+
     public function initializeObject() {
         /** @var $querySettings \TYPO3\CMS\Extbase\Persistence\Generic\Typo3QuerySettings */
         $querySettings = $this->objectManager->get('TYPO3\\CMS\\Extbase\\Persistence\\Generic\\Typo3QuerySettings');
@@ -55,7 +58,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
 
         // define the enablecolumn fields to be ignored
         // if nothing else is given, all enableFields are ignored
-        //$querySettings->setIgnoreEnableFields(TRUE);       
+        //$querySettings->setIgnoreEnableFields(TRUE);
         // define single fields to be ignored
         //$querySettings->setEnableFieldsToBeIgnored(array('disabled','starttime'));
 
@@ -69,12 +72,12 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         //$querySettings->setSysLanguageUid(42);
         $this->setDefaultQuerySettings($querySettings);
     }
-    
+
     /**
   	 * action importXML
   	 * @return \string JSON
   	 */
-  	public function importXML($uniqid, $logRepository) {          
+  	public function importXML($uniqid, $logRepository) {
   	  $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload');
       file_put_contents($this->dir.'/log/upload.txt', 'importXML|start'.chr(10), FILE_APPEND);
       $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
@@ -85,16 +88,16 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
           if($_FILES['file']) {
             file_put_contents($this->dir.'/log/upload.txt', 'file name|'.$_FILES['file']['name'].chr(13).chr(10), FILE_APPEND);
             $this->fileProcessor = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Utility\\File\\ExtendedFileUtility');
-       
+
       		$fileName = $this->fileProcessor->getUniqueName(
                 $_FILES['file']['name'],
                 $this->dir
             );
-            
+
             $upload = \TYPO3\CMS\Core\Utility\GeneralUtility::upload_copy_move(
               $_FILES['file']['tmp_name'],
               $fileName);
-              
+
             $zip = new \ZipArchive;
             if ($zip->open($fileName) === TRUE) {
               $res = $zip->extractTo($this->dir);
@@ -108,7 +111,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $this->getStatusCode(418);
               file_put_contents($this->dir.'/log/upload.txt', 'error|418'.chr(13).chr(10), FILE_APPEND);
             }
-              
+
             $resourceFactory = \TYPO3\CMS\Core\Resource\ResourceFactory::getInstance();
             $defaultStorage = $resourceFactory->getDefaultStorage();
             $folder = $defaultStorage->getFolder('/user_upload/citavi_upload/');
@@ -128,7 +131,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                       $upload = \TYPO3\CMS\Core\Utility\GeneralUtility::upload_copy_move(
                         $uploaddir.$thisFile['name'],
                         $backupdir.time().'_'.$thisFile['name']);
-                        
+
                       return 1;
                     } else {
                       // Lösche die älteste Datei
@@ -136,19 +139,19 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                       foreach($files2 as $file2) {
                         if($i == 0) {
                           $thisFile2 = $file2->getProperties();
-                          unlink($backupdir.$thisFile2['name']);  
+                          unlink($backupdir.$thisFile2['name']);
                         }
-                        $i++;                    
+                        $i++;
                       }
                       // Kopiere die neue Datei in den Ordner
                       $upload = \TYPO3\CMS\Core\Utility\GeneralUtility::upload_copy_move(
                         $uploaddir.$thisFile['name'],
                         $backupdir.time().'_'.$thisFile['name']);
-                        
+
                       return 1;
                     }
                   }
-                }    
+                }
               }
             }
           } else {
@@ -163,7 +166,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
           $this->getStatusCode(417);
           file_put_contents($this->dir.'/log/upload.txt', 'error|417'.chr(13).chr(10), FILE_APPEND);
           exit;
-        } 
+        }
       } else {
         $statusCodeText = $this->getStatusCodeText(432);
         $logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqid.'', '[Citavi XML Upload]: Upload was terminated.', ''.$_POST['import_key'].'', $settings['sPid']);
@@ -172,7 +175,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         exit;
       }
     }
-    
+
     public function parseXML($step, $startTime, $uniqid, $LogRepository) {
       $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload');
       $this->key = $_POST['import_key'];
@@ -181,7 +184,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi_citavilist.']['settings.'];
       if($step == 99) {
         file_put_contents($this->dir.'/scheduler.txt', $fileName.'|'.$this->key.'|'.$uniqid, FILE_APPEND);
-        
+
         return 99;
       } else {
         $this->xml = new \XMLReader();
@@ -192,7 +195,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $array = json_decode($json,TRUE);
         $contents = var_export($array, true);
         $xmlObj = new \SimpleXMLElement($xmlstring);
-        
+
         switch($step) {
           case 1:
             $startTime = time();
@@ -203,15 +206,15 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 $this->truncateDatabase('tx_nwcitavi_domain_model_categoryhash');
                 for($i = 0; $i < $categoryCount; $i++) {
                   $category = $array['Categories']['Category'][$i];
-                  
+
                   if(strlen($category['@attributes']['ID']) > 0) {
                     $refstr = $this->generatedHash($category);
                     $this->hash = hash("md5", $refstr);
                     $this->insertInHashTable('CategoryHashRepository', 'CategoryHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
                     $columnExists = $this->columnExists('CategoryRepository', $category['@attributes']['ID'], 'tx_nwcitavi_domain_model_category');
-                    
+
                     $this->setDatabase($category, 'Category', $columnExists, $settings);
-                    
+
                     if ( is_array( $category['Categories']['Category'] ) ) {
                       $subCategoryCount = count($category['Categories']['Category']);
                       for($j = 0; $j < $subCategoryCount; $j++) {
@@ -221,10 +224,10 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                           $this->hash = hash("md5", $refstr);
                           $this->insertInHashTable('CategoryHashRepository', 'CategoryHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
                           $columnExists = $this->columnExists('CategoryRepository', $subcategory['@attributes']['ID'], 'tx_nwcitavi_domain_model_category');
-                          
+
                           $this->setDatabase($subcategory, 'Category', $columnExists, $settings, $category['@attributes']['ID']);
                         }
-                        
+
                         if ( is_array( $subcategory['Categories']['Category'] ) ) {
                           $subsubCategoryCount = count($subcategory['Categories']['Category']);
                           for($k = 0; $k < $subsubCategoryCount; $k++) {
@@ -234,10 +237,10 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                               $this->hash = hash("md5", $refstr);
                               $this->insertInHashTable('CategoryHashRepository', 'CategoryHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
                               $columnExists = $this->columnExists('CategoryRepository', $subsubcategory['@attributes']['ID'], 'tx_nwcitavi_domain_model_category');
-                              
+
                               $this->setDatabase($subsubcategory, 'Category', $columnExists, $settings, $subcategory['@attributes']['ID']);
                             }
-                            
+
                           }
                         }
                         unset($subsubcategory, $subsubCategoryAttributes, $db_subsubCat, $subsubCatUid);
@@ -255,13 +258,13 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
             $params['step'] = $step + 1;
             $params['startTime'] = $startTime;
             $params['uniqid'] = $uniqid;
-        
+
             return $params;
           exit;
-          
-          case 2:  
+
+          case 2:
             try {
-              if ( is_array( $array['Keywords']['Keyword'] ) ) {      
+              if ( is_array( $array['Keywords']['Keyword'] ) ) {
                 $keywordsCount = count($array['Keywords']['Keyword']);
                 $this->truncateDatabase('tx_nwcitavi_domain_model_keywordhash');
                 for($i = 0; $i < $keywordsCount; $i++) {
@@ -271,7 +274,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                     $this->hash = hash("md5", $refstr);
                     $this->insertInHashTable('KeywordHashRepository', 'KeywordHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
                     $columnExists = $this->columnExists('KeywordRepository', $keyword['@attributes']['ID'], 'tx_nwcitavi_domain_model_keyword');
-                    
+
                     $this->setDatabase($keyword, 'Keyword', $columnExists, $settings);
                   }
                   unset($keyword, $keywordAttributes, $db_keyword, $keywordUid);
@@ -281,17 +284,17 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $this->logRepository->addLog(1, 'Keywords could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
             }
             $this->xml->close();
-        
+
             $params['step'] = $step + 1;
             $params['startTime'] = $startTime;
             $params['uniqid'] = $uniqid;
-        
+
             return $params;
           exit;
-          
-          case 3:        
+
+          case 3:
             try {
-              if ( is_array( $array['Libraries']['Library'] ) ) {        
+              if ( is_array( $array['Libraries']['Library'] ) ) {
                 $librariesCount = count($array['Libraries']['Library']);
                 $this->truncateDatabase('tx_nwcitavi_domain_model_libraryhash');
                 for($i = 0; $i < $librariesCount; $i++) {
@@ -301,7 +304,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                     $this->hash = hash("md5", $refstr);
                     $this->insertInHashTable('LibraryHashRepository', 'LibraryHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
                     $columnExists = $this->columnExists('LibraryRepository', $library['@attributes']['ID'], 'tx_nwcitavi_domain_model_library');
-                    
+
                     $this->setDatabase($library, 'Library', $columnExists, $settings);
                   }
                   unset($library, $libraryAttributes, $db_library, $libraryUid);
@@ -311,17 +314,17 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $this->logRepository->addLog(1, 'Libraries could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
             }
             $this->xml->close();
-        
+
             $params['step'] = $step + 1;
             $params['startTime'] = $startTime;
             $params['uniqid'] = $uniqid;
-        
+
             return $params;
           exit;
-          
-          case 4:        
+
+          case 4:
             try {
-              if ( is_array( $array['Periodicals']['Periodical'] ) ) {    
+              if ( is_array( $array['Periodicals']['Periodical'] ) ) {
                 $periodicalsCount = count($array['Periodicals']['Periodical']);
                 $this->truncateDatabase('tx_nwcitavi_domain_model_periodicalhash');
                 for($i = 0; $i < $periodicalsCount; $i++) {
@@ -331,7 +334,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                     $this->hash = hash("md5", $refstr);
                     $this->insertInHashTable('PeriodicalHashRepository', 'PeriodicalHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
                     $columnExists = $this->columnExists('PeriodicalRepository', $periodical['@attributes']['ID'], 'tx_nwcitavi_domain_model_periodical');
-                    
+
                     $this->setDatabase($periodical, 'Periodical', $columnExists, $settings);
                   }
                   unset($periodical, $periodicalAttributes, $db_periodical, $periodicalUid);
@@ -341,17 +344,17 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $this->logRepository->addLog(1, 'Periodicals could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
             }
             $this->xml->close();
-        
+
             $params['step'] = $step + 1;
             $params['startTime'] = $startTime;
             $params['uniqid'] = $uniqid;
-        
+
             return $params;
           exit;
-          
-          case 5:        
+
+          case 5:
             try {
-              if ( is_array( $array['Persons']['Person'] ) ) {            
+              if ( is_array( $array['Persons']['Person'] ) ) {
                 $personsCount = count($array['Persons']['Person']);
                 $this->truncateDatabase('tx_nwcitavi_domain_model_personhash');
                 for($i = 0; $i < $personsCount; $i++) {
@@ -361,7 +364,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                     $this->hash = hash("md5", $refstr);
                     $this->insertInHashTable('PersonHashRepository', 'PersonHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
                     $columnExists = $this->columnExists('PersonRepository', $person['@attributes']['ID'], 'tx_nwcitavi_domain_model_person');
-                    
+
                     $this->setDatabase($person, 'Person', $columnExists, $settings);
                   }
                   unset($person, $personAttributes, $db_person, $personUid);
@@ -371,17 +374,17 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $this->logRepository->addLog(1, 'Persons could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
             }
             $this->xml->close();
-        
+
             $params['step'] = $step + 1;
             $params['startTime'] = $startTime;
             $params['uniqid'] = $uniqid;
-        
+
             return $params;
           exit;
-          
-          case 6:        
+
+          case 6:
             try {
-              if ( is_array( $array['Publishers']['Publisher'] ) ) {            
+              if ( is_array( $array['Publishers']['Publisher'] ) ) {
                 $publishersCount = count($array['Publishers']['Publisher']);
                 $this->truncateDatabase('tx_nwcitavi_domain_model_publisherhash');
                 for($i = 0; $i < $publishersCount; $i++) {
@@ -391,7 +394,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                     $this->hash = hash("md5", $refstr);
                     $this->insertInHashTable('PublisherHashRepository', 'PublisherHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
                     $columnExists = $this->columnExists('PublisherRepository', $publisher['@attributes']['ID'], 'tx_nwcitavi_domain_model_publisher');
-                    
+
                     $this->setDatabase($publisher, 'Publisher', $columnExists, $settings);
                   }
                   unset($publisher, $publisherAttributes, $db_publisher, $publisherUid);
@@ -401,17 +404,17 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $this->logRepository->addLog(1, 'Publishers could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
             }
             $this->xml->close();
-        
+
             $params['step'] = $step + 1;
             $params['startTime'] = $startTime;
             $params['uniqid'] = $uniqid;
-        
+
             return $params;
           exit;
-          
-          case 7:        
+
+          case 7:
             try {
-              if ( is_array( $array['SeriesTitles']['SeriesTitle'] ) ) {            
+              if ( is_array( $array['SeriesTitles']['SeriesTitle'] ) ) {
                 $seriestitlesCount = count($array['SeriesTitles']['SeriesTitle']);
                 $this->truncateDatabase('tx_nwcitavi_domain_model_seriestitlehash');
                 for($i = 0; $i < $seriestitlesCount; $i++) {
@@ -421,7 +424,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                     $this->hash = hash("md5", $refstr);
                     $this->insertInHashTable('SeriestitleHashRepository', 'SeriestitleHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
                     $columnExists = $this->columnExists('SeriestitleRepository', $seriestitle['@attributes']['ID'], 'tx_nwcitavi_domain_model_seriestitle');
-                    
+
                     $this->setDatabase($seriestitle, 'SeriesTitle', $columnExists, $settings);
                   }
                   unset($seriestitle, $seriestitleAttributes, $db_seriestitle, $seriestitleUid);
@@ -431,17 +434,17 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $this->logRepository->addLog(1, 'Seriestitles could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
             }
             $this->xml->close();
-        
+
             $params['step'] = $step + 1;
             $params['startTime'] = $startTime;
             $params['uniqid'] = $uniqid;
-        
+
             return $params;
           exit;
-          
-          case 8:        
+
+          case 8:
             try {
-              if ( is_array( $array['Thoughts']['KnowledgeItem'] ) ) {            
+              if ( is_array( $array['Thoughts']['KnowledgeItem'] ) ) {
                 $knowledgeitemsCount = count($array['Thoughts']['KnowledgeItem']);
                 $this->truncateDatabase('tx_nwcitavi_domain_model_knowledgeitemhash');
                 for($i = 0; $i < $knowledgeitemsCount; $i++) {
@@ -451,7 +454,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                     $this->hash = hash("md5", $refstr);
                     $this->insertInHashTable('KnowledgeItemHashRepository', 'KnowledgeItemHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
                     $columnExists = $this->columnExists('KnowledgeItemRepository', $knowledgeitem['@attributes']['ID'], 'tx_nwcitavi_domain_model_knowledgeitem');
-                    
+
                     $this->setDatabase($seriestitle, 'KnowledgeItem', $columnExists, $settings);
                   }
                   unset($knowledgeitem, $knowledgeitemAttributes, $db_knowledgeitem, $knowledgeitemUid);
@@ -461,17 +464,17 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $this->logRepository->addLog(1, 'Knowledgeitems could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
             }
             $this->xml->close();
-        
+
             $params['step'] = $step + 1;
             $params['startTime'] = $startTime;
             $params['uniqid'] = $uniqid;
-        
+
             return $params;
           exit;
-          
+
           case 9:
             try {
-              if ( is_array( $array['References']['Reference'] ) ) {    
+              if ( is_array( $array['References']['Reference'] ) ) {
                 $refCount = count($array['References']['Reference']);
                 $this->truncateDatabase('tx_nwcitavi_domain_model_referencehash');
                 $this->truncateDatabase('tx_nwcitavi_domain_model_locationhash');
@@ -530,29 +533,29 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                     $this->db_parentref = $this->checkIfEntryExists('tx_nwcitavi_domain_model_reference', 'citavi_id', $ref['ParentReferenceID']);
                     $this->sortDate = $db_parentref['sort_date'];
                   }
-                  
+
                   if(strlen($ref['@attributes']['ID']) > 0) {
                     $refstr = $this->generatedHash($ref);
                     $this->hash = hash("md5", $refstr);
                     $this->insertInHashTable('ReferenceHashRepository', 'ReferenceHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
                     $columnExists = $this->columnExists('ReferenceRepository', $ref['@attributes']['ID'], 'tx_nwcitavi_domain_model_reference');
-                    
+
                     $this->setDatabase($ref, 'Reference', $columnExists, $settings);
-                    
+
                     // Locations speichern
                     if($array['References']['Reference'][$i]['Locations']['Location']['@attributes']) {
                       $location = $array['References']['Reference'][$i]['Locations']['Location'];
-                      if(strlen($location['@attributes']['ID']) > 0) {    
+                      if(strlen($location['@attributes']['ID']) > 0) {
                         $locationstr = $this->generatedHash($location);
                         $this->hash = hash("md5", $locationstr);
                         $this->insertInHashTable('LocationHashRepository', 'LocationHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
                         $columnExists = $this->columnExists('LocationRepository', $location['@attributes']['ID'], 'tx_nwcitavi_domain_model_location');
-                        
+
                         $this->setDatabase($location, 'Location', $columnExists, $settings);
-                        
+
                         // Location verknüpfen
                         $this->updateReferenceLocation($ref, $location['@attributes']['ID']);
-                          
+
                         //Libraries verknüpfen
                         if(strlen($array['References']['Reference'][$i]['Locations']['Location']['LibraryID']) > 0) {
                           $this->updateLocationLibrary($location['@attributes']['ID'], $array['References']['Reference'][$i]['Locations']['Location']['LibraryID']);
@@ -569,12 +572,12 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                             $this->hash = hash("md5", $locationstr);
                             $this->insertInHashTable('LocationHashRepository', 'LocationHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
                             $columnExists = $this->columnExists('LocationRepository', $location['@attributes']['ID'], 'tx_nwcitavi_domain_model_location');
-                            
+
                             $this->setDatabase($location, 'Location', $columnExists, $settings);
-                            
+
                             // Location verknüpfen
                             $this->updateReferenceLocation($ref, $location['@attributes']['ID']);
-                            
+
                             //Libraries verknüpfen
                             if(strlen($array['References']['Reference'][$i]['Locations']['Location'][$j]['LibraryID']) > 0) {
                               $this->updateLocationLibrary($location['@attributes']['ID'], $array['References']['Reference'][$i]['Locations']['Location'][$j]['LibraryID']);
@@ -600,48 +603,48 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $this->logRepository->addLog(1, 'References could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
             }
             $this->xml->close();
-            
+
             unlink($fileName);
-            
+
             $endTime = time();
-        
+
             file_put_contents($this->dir.'/log/upload.txt', date('d.m.Y H:i:s', $endTime).chr(13).chr(10), FILE_APPEND);
-            
+
             $to = $settings['email'];
             $html = '<p>Der Scheduler wurde um '.date('H:i:s', $startTime).' Uhr gestartet und wurde für '.date('H:i:s', ($endTime - $startTime - 3600)).' Minuten ausgeführt. Beendet wurder der Scheduler um '.date('H:i:s', $endTime).' Uhr</p>';
-            $subject = $settings['subject']; 
+            $subject = $settings['subject'];
             $plain = strip_tags($html);
             $fromEmail = 'noreply@netzweber.de';
             $fromName = 'Netzweber GmbH';
             $replyToEmail = 'lutz.eckelmann@netzweber.de';
             $replyToName = 'Netzweber GmbH';
             $returnPath = '';
-            
+
             $resParseXML = $this->sendMail($to, $subject, $html, $plain, $fromEmail, $fromName, $replyToEmail, $replyToName, $returnPath, $attachements = array());
-            
+
             $params['step'] = $step + 1;
             $params['startTime'] = $startTime;
             $params['uniqid'] = $uniqid;
-        
+
             return $params;
           exit;
         }
       }
     }
-    
+
     public function lastModification ( $dir, $todo = 'new', $format = 'd.m.Y H:i:s' ) {
       if ( is_file ( $dir ) )
         return false;
-      
+
       $lastfile = '';
       if( strlen( $dir ) - 1 != '\\' || strlen( $dir ) - 1 != '/' )
-        $dir .= '/'; 
-           
-      $handle = @opendir( $dir ); 
-       
+        $dir .= '/';
+
+      $handle = @opendir( $dir );
+
       if( !$handle )
-        return false; 
-           
+        return false;
+
       while ( ( $file = readdir( $handle ) ) !== false ) {
         if( $file != '.' && $file != '..' && is_file ( $dir.$file ) ) {
           if ( $todo == 'old' ) {
@@ -656,18 +659,18 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
           if ( empty( $lastfile ) )
             $lastfile = $file;
         }
-      } 
-       
-      $fileInfo['dir'] = $dir; 
-      $fileInfo['file'] = $lastfile; 
-      $fileInfo['time'] = filemtime( $dir.$lastfile ); 
+      }
+
+      $fileInfo['dir'] = $dir;
+      $fileInfo['file'] = $lastfile;
+      $fileInfo['time'] = filemtime( $dir.$lastfile );
       $fileInfo['formattime'] = date( $format, filemtime( $dir.$lastfile ) );
-      
+
       closedir( $handle );
-      
+
       return $fileInfo;
     }
-    
+
     public function getStatusCodeText($code = NULL, $extramsg = '', $errormsg = '') {
       switch ($code) {
         case 100: $msg['text'] = 'Continue'; break;
@@ -720,10 +723,10 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         default:
           $msg['text'] = 'Unknown http status code "' . htmlentities($code) . '"';
       }
-      
+
       return $msg;
     }
-    
+
     public function getStatusCode($code = NULL, $extramsg = '', $errormsg = '') {
       if ($code !== NULL) {
         switch ($code) {
@@ -778,7 +781,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               exit('Unknown http status code "' . htmlentities($code) . '"');
           break;
         }
-        
+
         $protocol = (isset($_SERVER['SERVER_PROTOCOL']) ? $_SERVER['SERVER_PROTOCOL'] : 'HTTP/1.0');
 
         header($protocol . ' ' . $code . ' ' . $text);
@@ -788,10 +791,10 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       } else {
         $code = (isset($GLOBALS['http_response_code']) ? $GLOBALS['http_response_code'] : 200);
       }
-      
+
       return $code;
     }
-    
+
     function initTSFE($id = 1, $typeNum = 0) {
       \TYPO3\CMS\Frontend\Utility\EidUtility::initTCA();
       if (!is_object($GLOBALS['TT'])) {
@@ -805,12 +808,12 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       $GLOBALS['TSFE']->initTemplate();
       $GLOBALS['TSFE']->getConfigArray();
     }
-    
+
     public function truncateDatabase($table) {
       $GLOBALS['TYPO3_DB']->exec_TRUNCATEquery($table);
     }
-    
-    public function generatedHash($ref) {      
+
+    public function generatedHash($ref) {
       foreach($ref as $key => $value) {
         if(is_array($value)) {
           $hash .= $this->generatedHash($value);
@@ -818,11 +821,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
           $hash .= $value;
         }
       }
-      
+
       return $hash;
     }
-    
-    public function insertInHashTable($repo, $model, $hash, $pid) { 
+
+    public function insertInHashTable($repo, $model, $hash, $pid) {
       $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('tx_nwcitavi_domain_model_'.strtolower($model));
       $queryBuilder->insert('tx_nwcitavi_domain_model_'.strtolower($model));
       $queryBuilder->values([
@@ -832,7 +835,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         ]);
       $res = $queryBuilder->execute();
     }
-    
+
     public function columnExists($repo, $citaviId, $table) {
       $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
       switch($repo) {
@@ -841,7 +844,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
           break;
         default:
           $repository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\'.$repo);
-      }    
+      }
       $res = $repository->findByCitaviId($citaviId, $table);
       $i = 0;
       foreach($res as $obj) {
@@ -850,18 +853,18 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
           $i++;
         }
       }
-      
+
       return $result;
     }
-    
+
     public function deletedDatabaseColumns($t1, $t2, $settings) {
       if($t1 == 'tx_nwcitavi_domain_model_category') {
         $GLOBALS['TYPO3_DB']->sql_query('DELETE r FROM '.$t1.' r LEFT JOIN '.$t2.' rh ON r.citavi_hash = rh.citavi_hash WHERE rh.citavi_hash IS NULL AND r.pid = '.$settings['sPid']);
       } else {
         $GLOBALS['TYPO3_DB']->sql_query('DELETE r FROM '.$t1.' r LEFT JOIN '.$t2.' rh ON r.citavi_hash = rh.citavi_hash WHERE rh.citavi_hash IS NULL');
-      } 
+      }
     }
-    
+
     public function setDatabase($ref, $modelTitle, $columnExists, $settings = null, $parent = null) {
       $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
       switch($modelTitle) {
@@ -873,7 +876,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
             } else {
               $newReference = new \Netzweber\NwCitavi\Domain\Model\Reference();
             }
-            $newReference->setPid(($settings['sPid']) ? $settings['sPid'] : '0');        
+            $newReference->setPid(($settings['sPid']) ? $settings['sPid'] : '0');
             $newReference->setCitaviHash($this->hash);
             $newReference->setCitaviId(($ref['@attributes']['ID']) ? $ref['@attributes']['ID'] : '0');
             $newReference->setReferenceType(($ref['@attributes']['ReferenceType']) ? $ref['@attributes']['ReferenceType'] : '');
@@ -905,11 +908,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 $newReference->setAccessDate($ref['AccessDate']);
               } catch (Exception $e) {
                 $this->logRepository->addLog(1, 'DateTime [AccessDate] "'.$ref['AccessDate'].'" could not be parsed for Reference '.$ref['@attributes']['ID'].'. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-              }              
+              }
             }
             $newReference->setAdditions(($ref['Additions']) ? $ref['Additions'] : '');
             $newReference->setRefAuthors(($ref['Authors']) ? $ref['Authors'] : '');
-            if($ref['Authors'] != '') {          
+            if($ref['Authors'] != '') {
               $authors = $this->getRelatedObjectStorage($ref['Authors'], 'citavi_id', 'tx_nwcitavi_domain_model_person', 'PersonRepository');
               if($authors) {
                 $newReference->setAuthors($authors);
@@ -950,7 +953,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               }
             }
             $newReference->setEvaluation(($ref['Evaluation']) ? $ref['Evaluation'] : '');
-            $newReference->setEvaluationRTF(($ref['EvaluationRTF']) ? $ref['EvaluationRTF'] : '');        
+            $newReference->setEvaluationRTF(($ref['EvaluationRTF']) ? $ref['EvaluationRTF'] : '');
             $newReference->setRefKeywords(($ref['Keywords']) ? $ref['Keywords'] : '');
             if($ref['Keywords'] != '') {
               $keywords = $this->getRelatedObjectStorage($ref['Keywords'], 'citavi_id', 'tx_nwcitavi_domain_model_keyword', 'KeywordRepository');
@@ -1031,9 +1034,9 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
             if(count($sortDateParts)>1) {
               foreach($sortDateParts as $part) {
                 if(strlen($part)==4) {
-                  $this->sortDate = $part;  
+                  $this->sortDate = $part;
                 }
-              }  
+              }
             }
             $newReference->setSortDate(($this->sortDate) ? $this->sortDate : '');
             $newReference->setTxExtbaseType('Tx_NwCitaviFe_Reference');
@@ -1042,7 +1045,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               if($parentReference) {
                 $newReference->setParentReferences($parentReference);
               }
-            }                
+            }
             if($columnExists) {
               $repository->update($newReference);
             } else {
@@ -1050,7 +1053,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
             }
           } catch (Exception $e) {
             $this->logRepository->addLog(1, 'Reference "'.$ref['Title'].'" could not be parsed. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-          }                    
+          }
           break;
         case 'Keyword':
           try {
@@ -1110,7 +1113,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
             }
           } catch (Exception $e) {
             $this->logRepository->addLog(1, 'Library "'.$ref['@attributes']['Abbreviation'].'" could not be parsed. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-          } 
+          }
           break;
         case 'Periodical':
           try {
@@ -1278,17 +1281,17 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $repository->update($newReference);
             } else {
               $repository->add($newReference);
-            } 
+            }
           } catch (Exception $e) {
             $this->logRepository->addLog(1, 'KnowledgeItem "'.$ref['Text'].'" could not be parsed. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
           }
           break;
         case 'Category':
-          try {        
+          try {
             $repository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\CategoryRepository');
             if($columnExists) {
               $newReference = $columnExists;
-            } else {          
+            } else {
               $newReference = new \Netzweber\NwCitavi\Domain\Model\Category();
             }
             $newReference->setPid(($settings['sPid']) ? $settings['sPid'] : '0');
@@ -1303,9 +1306,9 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
             $modifiedOn = new \DateTime(($ref['@attributes']['ModifiedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['ModifiedOn']) : '1000-01-01 00:00:00');
             $newReference->setModifiedOn($modifiedOn->getTimestamp());
             $newReference->setTitle(($ref['@attributes']['Name']) ? $ref['@attributes']['Name'] : '');
-            $newReference->setLiteraturlistId($this->key);          
-            if($parent) {          
-              $res = $repository->findByCitaviId($parent);            
+            $newReference->setLiteraturlistId($this->key);
+            if($parent) {
+              $res = $repository->findByCitaviId($parent);
               $parentObj = new \TYPO3\CMS\Extbase\Persistence\ObjectStorage();
               $i = 0;
               foreach($res as $obj) {
@@ -1320,7 +1323,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               }
             }
             //\TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump($newReference);
-            
+
             if($columnExists) {
               $repository->update($newReference);
             } else {
@@ -1368,11 +1371,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       $persistenceManager = $this->objectManager->get("TYPO3\\CMS\\Extbase\\Persistence\\Generic\\PersistenceManager");
       $persistenceManager->persistAll();
     }
-    
+
     public function setDatetimeByCitaviDate($citaviDate) {
       return str_replace("T", " ", $citaviDate);
     }
-    
+
     public function getRelatedObjectStorage($keys, $field_name, $table, $repository) {
       $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
       $objectRepository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\'.$repository);
@@ -1391,7 +1394,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
           } else {
             $where .= ' OR '.$field_name.' LIKE \''.$keyArray[$i].'\'';
             $orderby .= ', \''.$keyArray[$i].'\'';
-          } 
+          }
         }
         if(strlen($orderby) > 0) {
           $orderby .= ') ASC';
@@ -1408,7 +1411,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         return false;
       }
     }
-    
+
     public function getRelatedCategories($categories) {
       $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
       $categoryRepository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\CategoryRepository');
@@ -1424,23 +1427,23 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
             $where .= ' citavi_id LIKE \''.$categoriesArray[$i].'\'';
           } else {
             $where .= ' OR citavi_id LIKE \''.$categoriesArray[$i].'\'';
-          } 
+          }
         }
         $sql = 'SELECT * FROM tx_nwcitavi_domain_model_category WHERE '.$where;
         $query->statement($sql);
         $res = $query->execute();
-        
+
         $objectStorage = new \TYPO3\CMS\Extbase\Persistence\ObjectStorage;
         foreach($res as $obj) {
           $objectStorage->attach($obj);
         }
-        
+
         return $objectStorage;
       } else {
         return false;
       }
     }
-    
+
     public function updateReferenceLocation($ref, $locationId) {
       $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
       $locationRepository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\LocationRepository');
@@ -1450,7 +1453,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       $refResult = $refQuery->execute();
       if(isset($refResult[0])) {
         $updateReference = $refResult[0];
-        
+
         $locationQuery = $locationRepository->createQuery();
         $locationSql = 'SELECT * FROM tx_nwcitavi_domain_model_location WHERE citavi_id LIKE \''.$locationId.'\'';
         $locationQuery->statement($locationSql);
@@ -1459,43 +1462,43 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         foreach($locationResult as $obj) {
           $objectStorage->attach($obj);
         }
-        
+
         $updateReference->setLocations($objectStorage);
         $this->update($updateReference);
-        
+
         $persistenceManager = $this->objectManager->get("TYPO3\\CMS\\Extbase\\Persistence\\Generic\\PersistenceManager");
         $persistenceManager->persistAll();
       }
     }
-    
+
     public function updateLocationLibrary($locationId, $libraryId) {
       $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
       $locationRepository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\LocationRepository');
       $libraryRepository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\LibraryRepository');
-      
+
       $locationQuery = $locationRepository->createQuery();
       $locationSql = 'SELECT * FROM tx_nwcitavi_domain_model_location WHERE citavi_id LIKE \''.$locationId.'\'';
       $locationQuery->statement($locationSql);
       $locationResult = $locationQuery->execute();
       $updateLocation = $locationResult[0];
-      
+
       $libraryQuery = $libraryRepository->createQuery();
       $librarySql = 'SELECT * FROM tx_nwcitavi_domain_model_library WHERE citavi_id LIKE \''.$libraryId.'\'';
       $libraryQuery->statement($librarySql);
       $libraryResult = $libraryQuery->execute();
-      
+
       $objectStorage = new \TYPO3\CMS\Extbase\Persistence\ObjectStorage;
       foreach($libraryResult as $obj) {
         $objectStorage->attach($obj);
       }
-      
+
       $updateLocation->setLibrarys($objectStorage);
       $locationRepository->update($updateLocation);
-      
+
       $persistenceManager = $this->objectManager->get("TYPO3\\CMS\\Extbase\\Persistence\\Generic\\PersistenceManager");
       $persistenceManager->persistAll();
     }
-    
+
     public function compareHashData($settings) {
       $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_reference');
       $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_keyword');
@@ -1506,7 +1509,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_seriestitle');
       $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_knowledgeitem');
       $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_category');
-    
+
       $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_reference', 'tx_nwcitavi_domain_model_referencehash', $settings);
       $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_keyword', 'tx_nwcitavi_domain_model_keywordhash', $settings);
       $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_library', 'tx_nwcitavi_domain_model_libraryhash', $settings);
@@ -1517,25 +1520,25 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_knowledgeitem', 'tx_nwcitavi_domain_model_knowledgeitemhash', $settings);
       $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_category', 'tx_nwcitavi_domain_model_categoryhash', $settings);
     }
-    
+
     public function deletedDoubleDatabaseColumns($t) {
       $GLOBALS['TYPO3_DB']->sql_query('DELETE t1 FROM '.$t.' t1 INNER JOIN '.$t.' t2 WHERE t1.uid < t2.uid AND t1.citavi_hash = t2.citavi_hash;');
     }
-    
+
     public function parseCategories($level, $array, $settings, $parent = null) {
       $categoryCount = count($array['Categories']['Category']);
       for($i = 0; $i < $categoryCount; $i++) {
         if($array['Categories']['Category']['@attributes']) {
-          $category = $array['Categories']['Category'];                                        
+          $category = $array['Categories']['Category'];
         } else {
-          $category = $array['Categories']['Category'][$i];                    
+          $category = $array['Categories']['Category'][$i];
         }
         if(strlen($category['@attributes']['ID']) > 0) {
           $refstr = $this->generatedHash($category);
           $this->hash = hash("md5", $refstr);
           $this->insertInHashTable('CategoryHashRepository', 'CategoryHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
           $columnExists = $this->columnExists('CategoryRepository', $category['@attributes']['ID'], 'tx_nwcitavi_domain_model_category');
-          
+
           $this->setDatabase($category, 'Category', $columnExists, $settings, $parent);
           if ( is_array( $category['Categories']['Category'] ) ) {
             $this->parseCategories($level++, $category, $settings, $category['@attributes']['ID']);
@@ -1544,14 +1547,14 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       }
       unset($category);
     }
-    
-    public function taskParseXMLCategories($numEntries) {      
+
+    public function taskParseXMLCategories($numEntries) {
       try {
-        $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');        
-        $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload');                
+        $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+        $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload');
         $this->initTSFE($this->getRootpage($objectManager));
-        $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];        
-        $check = file_exists($this->dir.'/scheduler.txt');      
+        $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
+        $check = file_exists($this->dir.'/scheduler.txt');
         if($check && (int)$settings['sPid'] > 0) {
           $taskExists = file_exists($this->dir.'/task.txt');
           if(!$taskExists) {
@@ -1559,7 +1562,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
             $schedulerCols = explode("|", $schedulerString);
             $fileName = $schedulerCols[0];
             $this->key = $schedulerCols[1];
-            $uniqid = $schedulerCols[2]; 
+            $uniqid = $schedulerCols[2];
             $this->xml = new \XMLReader();
             $this->xml->open($fileName);
             $xmlstring = implode("", file($fileName));
@@ -1569,7 +1572,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
             $contents = var_export($array, true);
             $xmlObj = new \SimpleXMLElement($xmlstring);
             $level = 0;
-            
+
             try {
               if ( is_array( $array['Categories']['Category'] ) ) {
                 $this->truncateDatabase('tx_nwcitavi_domain_model_categoryhash');
@@ -1590,7 +1593,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                    TRUE
                 );
               }
-              
+
               $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
               $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
               $messageQueue->addMessage($message);
@@ -1602,7 +1605,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                  \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
                  TRUE
               );
-              
+
               $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
               $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
               $messageQueue->addMessage($message);
@@ -1615,7 +1618,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
                TRUE
             );
-            
+
             $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
             $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
             $messageQueue->addMessage($message);
@@ -1629,22 +1632,22 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
            \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
            TRUE
         );
-        
+
         $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
         $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $messageQueue->addMessage($message);
-      }    
+      }
     }
-    
+
     public function taskParseXMLKeywords($numEntries) {
       try {
         $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-        $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');        
+        $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
         $this->initTSFE($this->getRootpage($objectManager));
         $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
-        $check = file_exists($this->dir.'/scheduler.txt');      
+        $check = file_exists($this->dir.'/scheduler.txt');
         if($check) {
-          $taskExists = file_exists($this->dir.'/task.txt');        
+          $taskExists = file_exists($this->dir.'/task.txt');
           if($taskExists) {
             $taskString = file_get_contents ( $this->dir.'/task.txt' );
             $taskCols = explode("|", $taskString);
@@ -1653,7 +1656,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $schedulerCols = explode("|", $schedulerString);
               $fileName = $schedulerCols[0];
               $this->key = $schedulerCols[1];
-              $uniqid = $schedulerCols[2]; 
+              $uniqid = $schedulerCols[2];
               $this->xml = new \XMLReader();
               $this->xml->open($fileName);
               $xmlstring = implode("", file($fileName));
@@ -1662,24 +1665,24 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $array = json_decode($json,TRUE);
               $contents = var_export($array, true);
               $xmlObj = new \SimpleXMLElement($xmlstring);
-              
+
               try {
-                if ( is_array( $array['Keywords']['Keyword'] ) ) {      
+                if ( is_array( $array['Keywords']['Keyword'] ) ) {
                   $keywordsCount = count($array['Keywords']['Keyword']);
                   $this->truncateDatabase('tx_nwcitavi_domain_model_keywordhash');
                   for($i = 0; $i < $keywordsCount; $i++) {
                     if($array['Keywords']['Keyword']['@attributes']) {
-                      $keyword = $array['Keywords']['Keyword'];                                        
+                      $keyword = $array['Keywords']['Keyword'];
                     } else {
-                      $keyword = $array['Keywords']['Keyword'][$i];                    
+                      $keyword = $array['Keywords']['Keyword'][$i];
                     }
-                    
+
                     if(strlen($keyword['@attributes']['ID']) > 0) {
                       $refstr = $this->generatedHash($keyword);
                       $this->hash = hash("md5", $refstr);
                       $this->insertInHashTable('KeywordHashRepository', 'KeywordHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
                       $columnExists = $this->columnExists('KeywordRepository', $keyword['@attributes']['ID'], 'tx_nwcitavi_domain_model_keyword');
-                      
+
                       $this->setDatabase($keyword, 'Keyword', $columnExists, $settings);
                     }
                     unset($keyword, $keywordAttributes, $db_keyword, $keywordUid);
@@ -1701,7 +1704,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                      TRUE
                   );
                 }
-                
+
                 $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
@@ -1713,7 +1716,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                    \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
                    TRUE
                 );
-                
+
                 $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
@@ -1726,7 +1729,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                  \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
                  TRUE
               );
-              
+
               $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
               $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
               $messageQueue->addMessage($message);
@@ -1741,22 +1744,22 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
            \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
            TRUE
         );
-        
+
         $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
         $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $messageQueue->addMessage($message);
       }
     }
-    
+
     public function taskParseXMLLibraries($numEntries) {
       try {
         $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
         $this->initTSFE($this->getRootpage($objectManager));
         $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
-        $check = file_exists($this->dir.'/scheduler.txt');      
+        $check = file_exists($this->dir.'/scheduler.txt');
         if($check) {
-          $taskExists = file_exists($this->dir.'/task.txt');        
+          $taskExists = file_exists($this->dir.'/task.txt');
           if($taskExists) {
             $taskString = file_get_contents ( $this->dir.'/task.txt' );
             $taskCols = explode("|", $taskString);
@@ -1765,7 +1768,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $schedulerCols = explode("|", $schedulerString);
               $fileName = $schedulerCols[0];
               $this->key = $schedulerCols[1];
-              $uniqid = $schedulerCols[2]; 
+              $uniqid = $schedulerCols[2];
               $this->xml = new \XMLReader();
               $this->xml->open($fileName);
               $xmlstring = implode("", file($fileName));
@@ -1773,24 +1776,24 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $json = json_encode($xml);
               $array = json_decode($json,TRUE);
               $contents = var_export($array, true);
-              $xmlObj = new \SimpleXMLElement($xmlstring);            
+              $xmlObj = new \SimpleXMLElement($xmlstring);
               try {
-                if ( is_array( $array['Libraries']['Library'] ) ) {        
+                if ( is_array( $array['Libraries']['Library'] ) ) {
                   $librariesCount = count($array['Libraries']['Library']);
                   $this->truncateDatabase('tx_nwcitavi_domain_model_libraryhash');
                   for($i = 0; $i < $librariesCount; $i++) {
                     if($array['Libraries']['Library']['@attributes']) {
-                      $library = $array['Libraries']['Library'];                                        
+                      $library = $array['Libraries']['Library'];
                     } else {
-                      $library = $array['Libraries']['Library'][$i];                    
+                      $library = $array['Libraries']['Library'][$i];
                     }
-                    
+
                     if(strlen($library['@attributes']['ID']) > 0) {
                       $refstr = $this->generatedHash($library);
                       $this->hash = hash("md5", $refstr);
                       $this->insertInHashTable('LibraryHashRepository', 'LibraryHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
                       $columnExists = $this->columnExists('LibraryRepository', $library['@attributes']['ID'], 'tx_nwcitavi_domain_model_library');
-                      
+
                       $this->setDatabase($library, 'Library', $columnExists, $settings);
                     }
                     unset($library, $libraryAttributes, $db_library, $libraryUid);
@@ -1812,7 +1815,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                      TRUE
                   );
                 }
-                
+
                 $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
@@ -1824,7 +1827,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                    \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
                    TRUE
                 );
-                
+
                 $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
@@ -1837,7 +1840,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                  \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
                  TRUE
               );
-              
+
               $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
               $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
               $messageQueue->addMessage($message);
@@ -1852,22 +1855,22 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
            \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
            TRUE
         );
-        
+
         $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
         $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $messageQueue->addMessage($message);
       }
     }
-    
+
     public function taskParseXMLPeriodicals($numEntries) {
       try {
         $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
         $this->initTSFE($this->getRootpage($objectManager));
         $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
-        $check = file_exists($this->dir.'/scheduler.txt');      
+        $check = file_exists($this->dir.'/scheduler.txt');
         if($check) {
-          $taskExists = file_exists($this->dir.'/task.txt');        
+          $taskExists = file_exists($this->dir.'/task.txt');
           if($taskExists) {
             $taskString = file_get_contents ( $this->dir.'/task.txt' );
             $taskCols = explode("|", $taskString);
@@ -1876,7 +1879,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $schedulerCols = explode("|", $schedulerString);
               $fileName = $schedulerCols[0];
               $this->key = $schedulerCols[1];
-              $uniqid = $schedulerCols[2]; 
+              $uniqid = $schedulerCols[2];
               $this->xml = new \XMLReader();
               $this->xml->open($fileName);
               $xmlstring = implode("", file($fileName));
@@ -1884,24 +1887,24 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $json = json_encode($xml);
               $array = json_decode($json,TRUE);
               $contents = var_export($array, true);
-              $xmlObj = new \SimpleXMLElement($xmlstring);            
+              $xmlObj = new \SimpleXMLElement($xmlstring);
               try {
-                if ( is_array( $array['Periodicals']['Periodical'] ) ) {    
+                if ( is_array( $array['Periodicals']['Periodical'] ) ) {
                   $periodicalsCount = count($array['Periodicals']['Periodical']);
                   $this->truncateDatabase('tx_nwcitavi_domain_model_periodicalhash');
                   for($i = 0; $i < $periodicalsCount; $i++) {
                     if($array['Periodicals']['Periodical']['@attributes']) {
-                      $periodical = $array['Periodicals']['Periodical'];                                        
+                      $periodical = $array['Periodicals']['Periodical'];
                     } else {
-                      $periodical = $array['Periodicals']['Periodical'][$i];                    
+                      $periodical = $array['Periodicals']['Periodical'][$i];
                     }
-                    
+
                     if(strlen($periodical['@attributes']['ID']) > 0) {
                       $refstr = $this->generatedHash($periodical);
                       $this->hash = hash("md5", $refstr);
                       $this->insertInHashTable('PeriodicalHashRepository', 'PeriodicalHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
                       $columnExists = $this->columnExists('PeriodicalRepository', $periodical['@attributes']['ID'], 'tx_nwcitavi_domain_model_periodical');
-                      
+
                       $this->setDatabase($periodical, 'Periodical', $columnExists, $settings);
                     }
                     unset($periodical, $periodicalAttributes, $db_periodical, $periodicalUid);
@@ -1923,7 +1926,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                      TRUE
                   );
                 }
-                
+
                 $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
@@ -1935,7 +1938,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                    \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
                    TRUE
                 );
-                
+
                 $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
@@ -1948,7 +1951,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                  \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
                  TRUE
               );
-              
+
               $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
               $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
               $messageQueue->addMessage($message);
@@ -1963,22 +1966,22 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
            \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
            TRUE
         );
-        
+
         $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
         $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $messageQueue->addMessage($message);
       }
     }
-    
+
     public function taskParseXMLPersons($numEntries) {
       try {
         $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
         $this->initTSFE($this->getRootpage($objectManager));
         $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
-        $check = file_exists($this->dir.'/scheduler.txt');      
+        $check = file_exists($this->dir.'/scheduler.txt');
         if($check) {
-          $taskExists = file_exists($this->dir.'/task.txt');        
+          $taskExists = file_exists($this->dir.'/task.txt');
           if($taskExists) {
             $taskString = file_get_contents ( $this->dir.'/task.txt' );
             $taskCols = explode("|", $taskString);
@@ -1987,7 +1990,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $schedulerCols = explode("|", $schedulerString);
               $fileName = $schedulerCols[0];
               $this->key = $schedulerCols[1];
-              $uniqid = $schedulerCols[2]; 
+              $uniqid = $schedulerCols[2];
               $this->xml = new \XMLReader();
               $this->xml->open($fileName);
               $xmlstring = implode("", file($fileName));
@@ -1995,24 +1998,24 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $json = json_encode($xml);
               $array = json_decode($json,TRUE);
               $contents = var_export($array, true);
-              $xmlObj = new \SimpleXMLElement($xmlstring);            
+              $xmlObj = new \SimpleXMLElement($xmlstring);
               try {
-                if ( is_array( $array['Persons']['Person'] ) ) {            
+                if ( is_array( $array['Persons']['Person'] ) ) {
                   $personsCount = count($array['Persons']['Person']);
                   $this->truncateDatabase('tx_nwcitavi_domain_model_personhash');
                   for($i = 0; $i < $personsCount; $i++) {
                     if($array['Persons']['Person']['@attributes']) {
-                      $person = $array['Persons']['Person'];                                        
+                      $person = $array['Persons']['Person'];
                     } else {
-                      $person = $array['Persons']['Person'][$i];                    
+                      $person = $array['Persons']['Person'][$i];
                     }
-                    
+
                     if(strlen($person['@attributes']['ID']) > 0) {
                       $refstr = $this->generatedHash($person);
                       $this->hash = hash("md5", $refstr);
                       $this->insertInHashTable('PersonHashRepository', 'PersonHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
                       $columnExists = $this->columnExists('PersonRepository', $person['@attributes']['ID'], 'tx_nwcitavi_domain_model_person');
-                      
+
                       $this->setDatabase($person, 'Person', $columnExists, $settings);
                     }
                     unset($person, $personAttributes, $db_person, $personUid);
@@ -2034,7 +2037,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                      TRUE
                   );
                 }
-                
+
                 $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
@@ -2046,7 +2049,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                    \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
                    TRUE
                 );
-                
+
                 $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
@@ -2059,7 +2062,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                  \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
                  TRUE
               );
-              
+
               $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
               $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
               $messageQueue->addMessage($message);
@@ -2074,22 +2077,22 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
            \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
            TRUE
         );
-        
+
         $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
         $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $messageQueue->addMessage($message);
       }
     }
-    
+
     public function taskParseXMLPublishers($numEntries) {
       try {
         $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
         $this->initTSFE($this->getRootpage($objectManager));
         $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
-        $check = file_exists($this->dir.'/scheduler.txt');      
+        $check = file_exists($this->dir.'/scheduler.txt');
         if($check) {
-          $taskExists = file_exists($this->dir.'/task.txt');        
+          $taskExists = file_exists($this->dir.'/task.txt');
           if($taskExists) {
             $taskString = file_get_contents ( $this->dir.'/task.txt' );
             $taskCols = explode("|", $taskString);
@@ -2098,7 +2101,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $schedulerCols = explode("|", $schedulerString);
               $fileName = $schedulerCols[0];
               $this->key = $schedulerCols[1];
-              $uniqid = $schedulerCols[2]; 
+              $uniqid = $schedulerCols[2];
               $this->xml = new \XMLReader();
               $this->xml->open($fileName);
               $xmlstring = implode("", file($fileName));
@@ -2106,24 +2109,24 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $json = json_encode($xml);
               $array = json_decode($json,TRUE);
               $contents = var_export($array, true);
-              $xmlObj = new \SimpleXMLElement($xmlstring);            
+              $xmlObj = new \SimpleXMLElement($xmlstring);
               try {
-                if ( is_array( $array['Publishers']['Publisher'] ) ) {            
+                if ( is_array( $array['Publishers']['Publisher'] ) ) {
                   $publishersCount = count($array['Publishers']['Publisher']);
                   $this->truncateDatabase('tx_nwcitavi_domain_model_publisherhash');
                   for($i = 0; $i < $publishersCount; $i++) {
                     if($array['Publishers']['Publisher']['@attributes']) {
-                      $publisher = $array['Publishers']['Publisher'];                                        
+                      $publisher = $array['Publishers']['Publisher'];
                     } else {
-                      $publisher = $array['Publishers']['Publisher'][$i];                    
+                      $publisher = $array['Publishers']['Publisher'][$i];
                     }
-                    
+
                     if(strlen($publisher['@attributes']['ID']) > 0) {
                       $refstr = $this->generatedHash($publisher);
                       $this->hash = hash("md5", $refstr);
                       $this->insertInHashTable('PublisherHashRepository', 'PublisherHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
                       $columnExists = $this->columnExists('PublisherRepository', $publisher['@attributes']['ID'], 'tx_nwcitavi_domain_model_publisher');
-                      
+
                       $this->setDatabase($publisher, 'Publisher', $columnExists, $settings);
                     }
                     unset($publisher, $publisherAttributes, $db_publisher, $publisherUid);
@@ -2145,7 +2148,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                      TRUE
                   );
                 }
-                
+
                 $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
@@ -2157,7 +2160,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                    \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
                    TRUE
                 );
-                
+
                 $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
@@ -2170,7 +2173,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                  \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
                  TRUE
               );
-              
+
               $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
               $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
               $messageQueue->addMessage($message);
@@ -2185,22 +2188,22 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
            \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
            TRUE
         );
-        
+
         $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
         $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $messageQueue->addMessage($message);
       }
     }
-    
+
     public function taskParseXMLSeriestitles($numEntries) {
       try {
         $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
         $this->initTSFE($this->getRootpage($objectManager));
         $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
-        $check = file_exists($this->dir.'/scheduler.txt');      
+        $check = file_exists($this->dir.'/scheduler.txt');
         if($check) {
-          $taskExists = file_exists($this->dir.'/task.txt');        
+          $taskExists = file_exists($this->dir.'/task.txt');
           if($taskExists) {
             $taskString = file_get_contents ( $this->dir.'/task.txt' );
             $taskCols = explode("|", $taskString);
@@ -2209,7 +2212,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $schedulerCols = explode("|", $schedulerString);
               $fileName = $schedulerCols[0];
               $this->key = $schedulerCols[1];
-              $uniqid = $schedulerCols[2]; 
+              $uniqid = $schedulerCols[2];
               $this->xml = new \XMLReader();
               $this->xml->open($fileName);
               $xmlstring = implode("", file($fileName));
@@ -2217,24 +2220,24 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $json = json_encode($xml);
               $array = json_decode($json,TRUE);
               $contents = var_export($array, true);
-              $xmlObj = new \SimpleXMLElement($xmlstring);            
-              try {            
+              $xmlObj = new \SimpleXMLElement($xmlstring);
+              try {
                 if ( is_array( $array['SeriesTitles']['SeriesTitle'] ) ) {
                   $seriestitlesCount = count($array['SeriesTitles']['SeriesTitle']);
                   $this->truncateDatabase('tx_nwcitavi_domain_model_seriestitlehash');
                   for($i = 0; $i < $seriestitlesCount; $i++) {
                     if($array['SeriesTitles']['SeriesTitle']['@attributes']) {
-                      $seriestitle = $array['SeriesTitles']['SeriesTitle'];                                        
+                      $seriestitle = $array['SeriesTitles']['SeriesTitle'];
                     } else {
-                      $seriestitle = $array['SeriesTitles']['SeriesTitle'][$i];                    
+                      $seriestitle = $array['SeriesTitles']['SeriesTitle'][$i];
                     }
-                    
+
                     if(strlen($seriestitle['@attributes']['ID']) > 0) {
                       $refstr = $this->generatedHash($seriestitle);
                       $this->hash = hash("md5", $refstr);
                       $this->insertInHashTable('SeriestitleHashRepository', 'SeriestitleHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
                       $columnExists = $this->columnExists('SeriestitleRepository', $seriestitle['@attributes']['ID'], 'tx_nwcitavi_domain_model_seriestitle');
-                      
+
                       $this->setDatabase($seriestitle, 'SeriesTitle', $columnExists, $settings);
                     }
                     unset($seriestitle, $seriestitleAttributes, $db_seriestitle, $seriestitleUid);
@@ -2256,7 +2259,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                      TRUE
                   );
                 }
-                
+
                 $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
@@ -2268,7 +2271,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                    \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
                    TRUE
                 );
-                
+
                 $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
@@ -2281,7 +2284,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                  \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
                  TRUE
               );
-              
+
               $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
               $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
               $messageQueue->addMessage($message);
@@ -2296,22 +2299,22 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
            \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
            TRUE
         );
-        
+
         $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
         $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $messageQueue->addMessage($message);
       }
     }
-    
+
     public function taskParseXMLKnowledgeitems($numEntries) {
       try {
         $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
         $this->initTSFE($this->getRootpage($objectManager));
         $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
-        $check = file_exists($this->dir.'/scheduler.txt');      
+        $check = file_exists($this->dir.'/scheduler.txt');
         if($check) {
-          $taskExists = file_exists($this->dir.'/task.txt');        
+          $taskExists = file_exists($this->dir.'/task.txt');
           if($taskExists) {
             $taskString = file_get_contents ( $this->dir.'/task.txt' );
             $taskCols = explode("|", $taskString);
@@ -2320,7 +2323,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $schedulerCols = explode("|", $schedulerString);
               $fileName = $schedulerCols[0];
               $this->key = $schedulerCols[1];
-              $uniqid = $schedulerCols[2]; 
+              $uniqid = $schedulerCols[2];
               $this->xml = new \XMLReader();
               $this->xml->open($fileName);
               $xmlstring = implode("", file($fileName));
@@ -2328,24 +2331,24 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $json = json_encode($xml);
               $array = json_decode($json,TRUE);
               $contents = var_export($array, true);
-              $xmlObj = new \SimpleXMLElement($xmlstring);            
+              $xmlObj = new \SimpleXMLElement($xmlstring);
               try {
-                if ( is_array( $array['Thoughts']['KnowledgeItem'] ) ) {                              
+                if ( is_array( $array['Thoughts']['KnowledgeItem'] ) ) {
                   $knowledgeitemsCount = count($array['Thoughts']['KnowledgeItem']);
                   $this->truncateDatabase('tx_nwcitavi_domain_model_knowledgeitemhash');
                   for($i = 0; $i < $knowledgeitemsCount; $i++) {
                     if($array['Thoughts']['KnowledgeItem']['@attributes']) {
-                      $knowledgeitem = $array['Thoughts']['KnowledgeItem'];                                        
+                      $knowledgeitem = $array['Thoughts']['KnowledgeItem'];
                     } else {
-                      $knowledgeitem = $array['Thoughts']['KnowledgeItem'][$i];                    
+                      $knowledgeitem = $array['Thoughts']['KnowledgeItem'][$i];
                     }
-                    
+
                     if(strlen($knowledgeitem['@attributes']['ID']) > 0) {
                       $refstr = $this->generatedHash($knowledgeitem);
                       $this->hash = hash("md5", $refstr);
                       $this->insertInHashTable('KnowledgeItemHashRepository', 'KnowledgeItemHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
                       $columnExists = $this->columnExists('KnowledgeItemRepository', $knowledgeitem['@attributes']['ID'], 'tx_nwcitavi_domain_model_knowledgeitem');
-                      
+
                       $this->setDatabase($seriestitle, 'KnowledgeItem', $columnExists, $settings);
                     }
                     unset($knowledgeitem, $knowledgeitemAttributes, $db_knowledgeitem, $knowledgeitemUid);
@@ -2367,7 +2370,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                      TRUE
                   );
                 }
-                
+
                 $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
@@ -2379,7 +2382,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                    \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
                    TRUE
                 );
-                
+
                 $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
@@ -2392,7 +2395,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                  \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
                  TRUE
               );
-              
+
               $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
               $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
               $messageQueue->addMessage($message);
@@ -2407,22 +2410,22 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
            \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
            TRUE
         );
-        
+
         $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
         $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $messageQueue->addMessage($message);
       }
     }
-    
+
     public function taskParseXMLReferences($numEntries) {
       try {
         $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
         $this->initTSFE($this->getRootpage($objectManager));
         $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
-        $check = file_exists($this->dir.'/scheduler.txt');      
+        $check = file_exists($this->dir.'/scheduler.txt');
         if($check) {
-          $taskExists = file_exists($this->dir.'/task.txt');        
+          $taskExists = file_exists($this->dir.'/task.txt');
           if($taskExists) {
             $taskString = file_get_contents ( $this->dir.'/task.txt' );
             $taskCols = explode("|", $taskString);
@@ -2431,7 +2434,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $schedulerCols = explode("|", $schedulerString);
               $fileName = $schedulerCols[0];
               $this->key = $schedulerCols[1];
-              $uniqid = $schedulerCols[2]; 
+              $uniqid = $schedulerCols[2];
               $this->xml = new \XMLReader();
               $this->xml->open($fileName);
               $xmlstring = implode("", file($fileName));
@@ -2439,18 +2442,18 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $json = json_encode($xml);
               $array = json_decode($json,TRUE);
               $contents = var_export($array, true);
-              $xmlObj = new \SimpleXMLElement($xmlstring);            
+              $xmlObj = new \SimpleXMLElement($xmlstring);
               try {
-                if ( is_array( $array['References']['Reference'] ) ) {    
+                if ( is_array( $array['References']['Reference'] ) ) {
                   $refCount = count($array['References']['Reference']);
                   $this->truncateDatabase('tx_nwcitavi_domain_model_referencehash');
                   for($i = 0; $i < $refCount; $i++) {
                     if($array['References']['Reference']['@attributes']) {
-                      $ref = $array['References']['Reference'];                                        
+                      $ref = $array['References']['Reference'];
                     } else {
-                      $ref = $array['References']['Reference'][$i];                    
+                      $ref = $array['References']['Reference'][$i];
                     }
-                    
+
                     switch($ref['@attributes']['ReferenceType']) {
                       case 'BookEdited';
                         $this->sortDate = $ref['Year'];
@@ -2504,13 +2507,13 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                       $this->db_parentref = $this->checkIfEntryExists('tx_nwcitavi_domain_model_reference', 'citavi_id', $ref['ParentReferenceID']);
                       $this->sortDate = $db_parentref['sort_date'];
                     }
-                    if(strlen($ref['@attributes']['ID']) > 0) {                  
+                    if(strlen($ref['@attributes']['ID']) > 0) {
                       $refstr = $this->generatedHash($ref);
                       $this->hash = hash("md5", $refstr);
                       $this->insertInHashTable('ReferenceHashRepository', 'ReferenceHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
-                      $columnExists = $this->columnExists('ReferenceRepository', $ref['@attributes']['ID'], 'tx_nwcitavi_domain_model_reference');                  
-                      
-                      $this->setDatabase($ref, 'Reference', $columnExists, $settings);                  
+                      $columnExists = $this->columnExists('ReferenceRepository', $ref['@attributes']['ID'], 'tx_nwcitavi_domain_model_reference');
+
+                      $this->setDatabase($ref, 'Reference', $columnExists, $settings);
                     }
                     unset($ref, $refAttributes, $db_ref, $refUid);
                   }
@@ -2531,7 +2534,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                      TRUE
                   );
                 }
-                
+
                 $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
@@ -2543,7 +2546,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                    \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
                    TRUE
                 );
-                
+
                 $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
@@ -2556,7 +2559,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                  \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
                  TRUE
               );
-              
+
               $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
               $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
               $messageQueue->addMessage($message);
@@ -2571,22 +2574,22 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
            \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
            TRUE
         );
-        
+
         $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
         $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $messageQueue->addMessage($message);
       }
     }
-    
+
     public function taskParseXMLLocations($numEntries) {
       try {
         $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
         $this->initTSFE($this->getRootpage($objectManager));
         $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
-        $check = file_exists($this->dir.'/scheduler.txt');      
+        $check = file_exists($this->dir.'/scheduler.txt');
         if($check) {
-          $taskExists = file_exists($this->dir.'/task.txt');        
+          $taskExists = file_exists($this->dir.'/task.txt');
           if($taskExists) {
             $taskString = file_get_contents ( $this->dir.'/task.txt' );
             $taskCols = explode("|", $taskString);
@@ -2595,7 +2598,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $schedulerCols = explode("|", $schedulerString);
               $fileName = $schedulerCols[0];
               $this->key = $schedulerCols[1];
-              $uniqid = $schedulerCols[2]; 
+              $uniqid = $schedulerCols[2];
               $this->xml = new \XMLReader();
               $this->xml->open($fileName);
               $xmlstring = implode("", file($fileName));
@@ -2603,19 +2606,19 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $json = json_encode($xml);
               $array = json_decode($json,TRUE);
               $contents = var_export($array, true);
-              $xmlObj = new \SimpleXMLElement($xmlstring);            
-              try {    
+              $xmlObj = new \SimpleXMLElement($xmlstring);
+              try {
                 if ( is_array( $array['References']['Reference'] ) ) {
                   $refCount = count($array['References']['Reference']);
                   $this->truncateDatabase('tx_nwcitavi_domain_model_locationhash');
                   for($i = 0; $i < $refCount; $i++) {
                     if($array['References']['Reference']['@attributes']) {
-                      $ref = $array['References']['Reference'];                                        
+                      $ref = $array['References']['Reference'];
                     } else {
-                      $ref = $array['References']['Reference'][$i];                    
+                      $ref = $array['References']['Reference'][$i];
                     }
-                                    
-                    if(strlen($ref['@attributes']['ID']) > 0) {                  
+
+                    if(strlen($ref['@attributes']['ID']) > 0) {
                       // Locations speichern
                       if($array['References']['Reference'][$i]['Locations']['Location']['@attributes']) {
                         $location = $array['References']['Reference'][$i]['Locations']['Location'];
@@ -2624,12 +2627,12 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                           $this->hash = hash("md5", $locationstr);
                           $this->insertInHashTable('LocationHashRepository', 'LocationHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
                           $columnExists = $this->columnExists('LocationRepository', $location['@attributes']['ID'], 'tx_nwcitavi_domain_model_location');
-                          
+
                           $this->setDatabase($location, 'Location', $columnExists, $settings);
-                          
+
                           // Location verknüpfen
                           $this->updateReferenceLocation($ref, $location['@attributes']['ID']);
-                            
+
                           //Libraries verknüpfen
                           if(strlen($array['References']['Reference'][$i]['Locations']['Location']['LibraryID']) > 0) {
                             $this->updateLocationLibrary($location['@attributes']['ID'], $array['References']['Reference'][$i]['Locations']['Location']['LibraryID']);
@@ -2646,12 +2649,12 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                               $this->hash = hash("md5", $locationstr);
                               $this->insertInHashTable('LocationHashRepository', 'LocationHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
                               $columnExists = $this->columnExists('LocationRepository', $location['@attributes']['ID'], 'tx_nwcitavi_domain_model_location');
-                              
+
                               $this->setDatabase($location, 'Location', $columnExists, $settings);
-                              
+
                               // Location verknüpfen
                               $this->updateReferenceLocation($ref, $location['@attributes']['ID']);
-                              
+
                               //Libraries verknüpfen
                               if(strlen($array['References']['Reference'][$i]['Locations']['Location'][$j]['LibraryID']) > 0) {
                                 $this->updateLocationLibrary($location['@attributes']['ID'], $array['References']['Reference'][$i]['Locations']['Location'][$j]['LibraryID']);
@@ -2660,7 +2663,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                           }
                         }
                         unset($location, $locationAttributes, $db_location, $locationUid);
-                      }                  
+                      }
                     }
                     unset($ref, $refAttributes, $db_ref, $refUid);
                   }
@@ -2681,7 +2684,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                      TRUE
                   );
                 }
-                
+
                 $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
@@ -2693,7 +2696,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                    \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
                    TRUE
                 );
-                
+
                 $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
@@ -2706,7 +2709,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                  \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
                  TRUE
               );
-              
+
               $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
               $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
               $messageQueue->addMessage($message);
@@ -2721,22 +2724,22 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
            \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
            TRUE
         );
-        
+
         $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
         $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $messageQueue->addMessage($message);
       }
     }
-    
+
     public function taskParseXMLFiles($numEntries) {
       try {
         $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
         $this->initTSFE($this->getRootpage($objectManager));
-        $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];        
-        $check = file_exists($this->dir.'/scheduler.txt');      
+        $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
+        $check = file_exists($this->dir.'/scheduler.txt');
         if($check) {
-          $taskExists = file_exists($this->dir.'/task.txt');        
+          $taskExists = file_exists($this->dir.'/task.txt');
           if($taskExists) {
             $taskString = file_get_contents ( $this->dir.'/task.txt' );
             $taskCols = explode("|", $taskString);
@@ -2746,7 +2749,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $fileName = $schedulerCols[0];
               if($numEntries == 0) {
                 unlink($fileName);
-                              
+
                 if(file_exists($fileName)) {
                   $this->logRepository->addLog(1, 'File "'.$fileName.'" could not be deleted', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task still working.', ''.$this->key.'', $settings['sPid']);
                   $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
@@ -2755,13 +2758,13 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                      \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
                      TRUE
                   );
-                  
+
                   $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
                   $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                   $messageQueue->addMessage($message);
-                }              
+                }
               }
-              
+
               // FileReference erstellen
               $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/files/');
               $filecheck = file_exists($this->dir.'/files.txt');
@@ -2780,7 +2783,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 }
                 fclose($file_handle);
                 unlink($this->dir.'/files.txt');
-                
+
                 if(file_exists($this->dir.'/files.txt')) {
                   $this->logRepository->addLog(1, 'File "'.$this->dir.'/files.txt" could not be deleted', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task still working.', ''.$this->key.'', $settings['sPid']);
                   $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
@@ -2789,7 +2792,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                      \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
                      TRUE
                   );
-                  
+
                   $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
                   $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                   $messageQueue->addMessage($message);
@@ -2801,11 +2804,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                  \TYPO3\CMS\Core\Messaging\FlashMessage::OK,
                  TRUE
               );
-              
+
               $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
               $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
               $messageQueue->addMessage($message);
-              
+
               $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
               file_put_contents($this->dir.'/task.txt', 11);
             }
@@ -2819,30 +2822,30 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
            \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
            TRUE
         );
-        
+
         $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
         $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $messageQueue->addMessage($message);
       }
     }
-    
+
     public function taskParseXMLCleaner($numEntries) {
       try {
         $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
         $this->initTSFE($this->getRootpage($objectManager));
         $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
-        $check = file_exists($this->dir.'/scheduler.txt');      
+        $check = file_exists($this->dir.'/scheduler.txt');
         if($check) {
-          $taskExists = file_exists($this->dir.'/task.txt');        
+          $taskExists = file_exists($this->dir.'/task.txt');
           if($taskExists) {
             $taskString = file_get_contents ( $this->dir.'/task.txt' );
             $taskCols = explode("|", $taskString);
             if((int)$taskCols[0] == 11) {
               $this->compareHashData($settings);
-              
+
               unlink($this->dir.'/scheduler.txt');
-              
+
               if(file_exists($this->dir.'/scheduler.txt')) {
                 $this->logRepository->addLog(1, 'File "'.$this->dir.'/scheduler.txt" could not be deleted', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task still working.', ''.$this->key.'', $settings['sPid']);
                 $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
@@ -2851,14 +2854,14 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                    \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
                    TRUE
                 );
-                
+
                 $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
               }
-              
+
               unlink($this->dir.'/task.txt');
-              
+
               if(file_exists($this->dir.'/task.txt')) {
                 $this->logRepository->addLog(1, 'File "'.$this->dir.'/task.txt" could not be deleted', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task still working.', ''.$this->key.'', $settings['sPid']);
                 $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
@@ -2867,7 +2870,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                    \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
                    TRUE
                 );
-                
+
                 $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
@@ -2883,14 +2886,14 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
            \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
            TRUE
         );
-        
+
         $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
         $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $messageQueue->addMessage($message);
       }
     }
-    
-    public function setFileReferences($referenceId, $file, $fileType, $settings) {    
+
+    public function setFileReferences($referenceId, $file, $fileType, $settings) {
       $reference = $this->getByCitaviId($referenceId);
       if($reference) {
         $resourceFactory = \TYPO3\CMS\Core\Resource\ResourceFactory::getInstance();
@@ -2900,21 +2903,21 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         if(trim($fileType) == 'cover') {
           $reference->setCover($newFileReference);
           $this->update($reference);
-  
+
           $persistenceManager = $this->objectManager->get("TYPO3\\CMS\\Extbase\\Persistence\\Generic\\PersistenceManager");
           $persistenceManager->persistAll();
         }
-        
+
         if(trim($fileType) == 'attachment') {
           $reference->setAttachment($newFileReference);
           $this->update($reference);
-  
+
           $persistenceManager = $this->objectManager->get("TYPO3\\CMS\\Extbase\\Persistence\\Generic\\PersistenceManager");
           $persistenceManager->persistAll();
         }
       }
     }
-    
+
     public function getByCitaviId($referenceId) {
       $query = $this->createQuery();
       $sql = 'SELECT * FROM tx_nwcitavi_domain_model_reference WHERE citavi_id LIKE \''.$referenceId.'\'';
@@ -2927,33 +2930,44 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       }
       return $reference;
     }
-    
+
     public function findAllByFilter($settings, $page) {
-      //\TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump($settings);
-      //\TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump($page);    
-      $query = $this->createQuery();
-      $query->matching($query->logicalAnd($this->getAndOrConstraints($query, $settings)));
-      if($settings['showAllOnOnePage'] == false) {
-        $query->setLimit((int)$settings['pagelimit']);
-        $query->setOffset($page);
-      }
-      //\TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump($this->getOrderings($settings));
-      
-      return $query->execute();  
+  	    $query = $this->createQuery();
+  	    $query->matching($query->logicalAnd($this->getAndOrConstraints($query, $settings)));
+  	    if($settings['showAllOnOnePage'] === '0') {
+  	        $query->setLimit((int)$settings['pagelimit']);
+  	        $query->setOffset($page);
+  	    }
+  	    if($settings['showyearheadline'] === '1') {
+            $query->setOrderings(
+                [
+                    'sortDate' => QueryInterface::ORDER_DESCENDING,
+                    'title' => QueryInterface::ORDER_ASCENDING
+                ]
+            );
+        } else if ($settings['showreferencetype'] === '1') {
+            $query->setOrderings(
+                [
+                    'referenceType' => QueryInterface::ORDER_ASCENDING,
+                    'sortDate' => QueryInterface::ORDER_DESCENDING,
+                    'title' => QueryInterface::ORDER_ASCENDING
+                ]
+            );
+        }
+        return $query->execute();
     }
-    
-    public function numAllByFilter($settings) {    
-      $query = $this->createQuery();
-      $query->matching($query->logicalAnd($this->getAndOrConstraints($query, $settings)));            
-      $result = $query->count();
-    	return $result;  
+
+    public function numAllByFilter($settings): int
+    {
+  		$query = $this->createQuery();
+  		$query->matching($query->logicalAnd($this->getAndOrConstraints($query, $settings)));
+  		return $query->count();
     }
-    
+
     public function getAndOrConstraints($query, $settings) {
-      //\TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump($settings);
-      $constraints[] = $query->like('literaturlistId', $settings['import_key']);      
-      if($settings['searchstr'] != '') {
-        switch($settings['searchOptions']) {
+  	    $constraints[] = $query->like('literaturlistId', $settings['import_key']);
+  	    if($settings['searchstr'] != '') {
+  	        switch($settings['searchOptions']) {
           case 'title':
             $constraints[] = $query->logicalAnd(
               $query->logicalOr(
@@ -3102,7 +3116,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
             );
         }
       }
-      
+
       if($settings['searchReferencetype'] > -1 && !empty($settings['searchReferencetype']) && $settings['searchReferencetype'] != '') {
         if($settings['searchReferencetype'] == 'JournalArticlepeer-reviewed') {
           $constraints[] = $query->like('referenceType', 'JournalArticle');
@@ -3122,21 +3136,21 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
           $constraints[] = $query->like('referenceType', $settings['searchReferencetype']);
         }
       }
-      
+
       $selectedauthor = explode(",", $settings['selectedauthor']);
       if($selectedauthor[0] == '') unset($selectedauthor);
-      if ( is_array( $selectedauthor ) ) {  
+      if ( is_array( $selectedauthor ) ) {
         $numberOfSelectedauthor = count($selectedauthor);
         if($numberOfSelectedauthor > 0) {
           foreach($selectedauthor as $key => $value) {
-            $author[$key] = (int)$value;  
+            $author[$key] = (int)$value;
           }
           for($i = 0; $i < $numberOfSelectedauthor; $i++) {
             $authorConstraints[] = $query->contains('authors', $author[$i]);
           }
           $constraints[] = $query->logicalOr(
             $authorConstraints
-          );      
+          );
         }
       }
       $selectedpublisher = explode(",", $settings['selectedpublisher']);
@@ -3145,7 +3159,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $numberOfSelectedpublisher = count($selectedpublisher);
         if($numberOfSelectedpublisher > 0) {
           foreach($selectedpublisher as $key => $value) {
-            $publisher[$key] = (int)$value;  
+            $publisher[$key] = (int)$value;
           }
           for($i = 0; $i < $numberOfSelectedpublisher; $i++) {
             $publisherConstraints[] = $query->contains('publishers', $publisher[$i]);
@@ -3161,7 +3175,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $numberOfSelectedreferencetype = count($selectedreferencetype);
         if($numberOfSelectedreferencetype > 0) {
           foreach($selectedreferencetype as $key => $value) {
-            $referencetype[$key] = $value;  
+            $referencetype[$key] = $value;
           }
           for($i = 0; $i < $numberOfSelectedreferencetype; $i++) {
             if($referencetype[$i] != '') {
@@ -3170,7 +3184,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
           }
           $constraints[] = $query->logicalOr(
             $referenceTypeConstraints
-          );      
+          );
         }
       }
       $selectedkeyword = explode(",", $settings['selectedkeyword']);
@@ -3179,7 +3193,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $numberOfSelectedkeyword = count($selectedkeyword);
         if($numberOfSelectedkeyword > 0) {
           foreach($selectedkeyword as $key => $value) {
-            $keyword[$key] = (int)$value;  
+            $keyword[$key] = (int)$value;
           }
           for($i = 0; $i < $numberOfSelectedkeyword; $i++) {
             $keywordsConstraints[] = $query->contains('keywords', $keyword[$i]);
@@ -3200,7 +3214,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $numberOfSelectedcategory = count($selectedcategory);
         if($numberOfSelectedcategory > 0) {
           foreach($selectedcategory as $key => $value) {
-            $category[$key] = (int)$value;  
+            $category[$key] = (int)$value;
           }
           for($i = 0; $i < $numberOfSelectedcategory; $i++) {
             $categoryConstraints[] = $query->contains('categories', $category[$i]);
@@ -3210,14 +3224,14 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
           );
         }
       }
-      
+
       $selectedCategories = explode(",", $settings['searchCategories']);
       if($selectedCategories[0] == '' || $selectedCategories[0] == '-1') unset($selectedCategories);
       if ( is_array( $selectedCategories ) ) {
         $numberOfSelectedCategories = count($selectedCategories);
         if($numberOfSelectedCategories > 0) {
           foreach($selectedCategories as $key => $value) {
-            $category[$key] = (int)$value;  
+            $category[$key] = (int)$value;
           }
           for($i = 0; $i < $numberOfSelectedCategories; $i++) {
             $categoriesConstraints[] = $query->contains('categories', $category[$i]);
@@ -3227,14 +3241,14 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
           );
         }
       }
-      
+
       $selectedPersons = explode(",", $settings['searchPersons']);
       if($selectedPersons[0] == '' || $selectedPersons[0] == '-1') unset($selectedPersons);
       if ( is_array( $selectedPersons ) ) {
         $numberOfSelectedPersons = count($selectedPersons);
         if($numberOfSelectedPersons > 0) {
           foreach($selectedPersons as $key => $value) {
-            $person[$key] = (int)$value;  
+            $person[$key] = (int)$value;
           }
           for($i = 0; $i < $numberOfSelectedPersons; $i++) {
             $personsConstraints[] = $query->contains('authors', $person[$i]);
@@ -3244,14 +3258,14 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
           );
         }
       }
-      
+
       $selectedEditors = explode(",", $settings['searchEditors']);
       if($selectedEditors[0] == '' || $selectedEditors[0] == '-1') unset($selectedEditors);
       if ( is_array( $selectedEditors ) ) {
         $numberOfSelectedEditors = count($selectedEditors);
         if($numberOfSelectedEditors > 0) {
           foreach($selectedEditors as $key => $value) {
-            $editor[$key] = (int)$value;  
+            $editor[$key] = (int)$value;
           }
           for($i = 0; $i < $numberOfSelectedEditors; $i++) {
             $editorsConstraints[] = $query->contains('editors', $editor[$i]);
@@ -3261,14 +3275,14 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
           );
         }
       }
-      
+
       $selectedAuthors = explode(",", $settings['searchAuthors']);
       if($selectedAuthors[0] == '' || $selectedAuthors[0] == '-1') unset($selectedAuthors);
       if ( is_array( $selectedAuthors ) ) {
         $numberOfSelectedAuthors = count($selectedAuthors);
         if($numberOfSelectedAuthors > 0) {
           foreach($selectedAuthors as $key => $value) {
-            $author[$key] = (int)$value;  
+            $author[$key] = (int)$value;
           }
           for($i = 0; $i < $numberOfSelectedAuthors; $i++) {
             $authorsConstraints[] = $query->contains('authors', $author[$i]);
@@ -3278,14 +3292,14 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
           );
         }
       }
-      
+
       $selectedSpecialcategories = explode(",", $settings['searchSpecialcategories']);
       if($selectedSpecialcategories[0] == '' || $selectedSpecialcategories[0] == '-1') unset($selectedSpecialcategories);
       if ( is_array( $selectedSpecialcategories ) ) {
         $numberOfSpecialcategories = count($selectedSpecialcategories);
         if($numberOfSpecialcategories > 0) {
           foreach($selectedSpecialcategories as $key => $value) {
-            $specialcategory[$key] = (int)$value;  
+            $specialcategory[$key] = (int)$value;
           }
           for($i = 0; $i < $numberOfSpecialcategories; $i++) {
             $specialcategoriesConstraints[] = $query->contains('categories', $specialcategory[$i]);
@@ -3295,7 +3309,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
           );
         }
       }
-      
+
       if((int)$settings['searchYearfrom'] > 0 && (int)$settings['searchYearto'] > 0) {
         $constraints[] = $query->logicalAnd(
           $query->logicalOr(
@@ -3330,37 +3344,36 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
           )
         );
       }
-      //\TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump($constraints);
+
       $notConstraints = $this->getNotConstraints($query, $settings);
       if($notConstraints) {
         $constraints[] = $notConstraints;
-      }            
-      
-      return $constraints;
-    }
-    
-    public function getNotConstraints($query, $settings) {
-      $referencetype = $settings['referencetype']['ignore'];
-      if ( is_array( $referencetype ) ) {
-        $numberOfIgnoredreferencetype = count($referencetype);      
-        if($numberOfIgnoredreferencetype > 0) {        
-          for($i = 0; $i < $numberOfIgnoredreferencetype; $i++) {          
-            if($referencetype[$i] != '') {
-              $notconstraints[] = $query->logicalNot($query->like('referenceType', $referencetype[$i]));
-            }
-          }
-        }
-        if ( is_array( $notconstraints ) ) {
-          if(count($notconstraints) > 0) {        
-            $constraints = $query->logicalAnd($notconstraints);
-          }
-        }
       }
-      //\TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump($constraints);
-      
+
       return $constraints;
     }
-    
+
+    public function getNotConstraints($query, $settings) {
+  	    $referenceType = $settings['referencetype']['ignore'];
+        $notConstraints = null;
+        $constraints = null;
+        if ( is_array( $referenceType ) ) {
+            $numberOfIgnoredReferenceType = count($referenceType);
+            if($numberOfIgnoredReferenceType > 0) {
+                foreach ($referenceType as $i => $iValue) {
+                    if($iValue !== '') {
+                        $notConstraints[] = $query->logicalNot($query->like('referenceType', $referenceType[$i]));
+                    }
+                }
+            }
+            if (is_array($notConstraints) && count($notConstraints) > 0) {
+                $constraints = $query->logicalAnd($notConstraints);
+            }
+        }
+
+        return $constraints;
+  	}
+
     public function getSubCategories($categories, array $subcategories = [], $count = 0) {
       $count = count($subcategories);
       if(is_array($categories)) {
@@ -3374,7 +3387,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
              )
              ->execute();
           while ($row = $statement->fetch()) {
-             $subcategories[$count] = $row['uid_local'];             
+             $subcategories[$count] = $row['uid_local'];
              $uid[0] = $row['uid_local'];
              $subcategories = $this->getSubCategories($uid, $subcategories, $count);
              $count = count($subcategories);
@@ -3390,16 +3403,16 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
            )
            ->execute();
         while ($row = $statement->fetch()) {
-           $subcategories[$count] = $row['uid_local'];           
+           $subcategories[$count] = $row['uid_local'];
            $uid[0] = $row['uid_local'];
            $subcategories = $this->getSubCategories($uid, $subcategories, $count);
            $count = count($subcategories);
         }
       }
-      
+
       return $subcategories;
     }
-    
+
     public function getOrderings($settings) {
       $selectedpublicationsreferences = null;
       if($settings['selectedpublicationsreferences'] > -1 || $settings['selectedpublicationsreferences'] != '') {
@@ -3408,26 +3421,26 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
           unset($selectedpublicationsreferences);
         }
       }
-       
+
       if((int)$settings['selectedprofessor'] > 0 && (int)$settings['sortbyprofessor'] == 1) {
         if(!empty($settings['sorting'])) {
           $ordering = array(
             'custom_field7, \'10\', \'9\', \'8\', \'7\', \'6\', \'5\', \'4\', \'3\', \'2\', \'1\'' => \Netzweber\NwCitavi\Xclass\Typo3DbQueryParser::ORDER_FIELD_DESCENDING,
             'reference_type, '.$sort.'' => \Netzweber\NwCitavi\Xclass\Typo3DbQueryParser::ORDER_FIELD_ASCENDING,
-            'parentReferenceType' => \TYPO3\CMS\Extbase\Persistence\QueryInterface::ORDER_DESCENDING,
-            'customField1' => \TYPO3\CMS\Extbase\Persistence\QueryInterface::ORDER_DESCENDING,          
-            'sortDate' => \TYPO3\CMS\Extbase\Persistence\QueryInterface::ORDER_DESCENDING
+            'parentReferenceType' => QueryInterface::ORDER_DESCENDING,
+            'customField1' => QueryInterface::ORDER_DESCENDING,
+            'sortDate' => QueryInterface::ORDER_DESCENDING
           );
         } else {
           $ordering = array(
             'custom_field7, \'10\', \'9\', \'8\', \'7\', \'6\', \'5\', \'4\', \'3\', \'2\', \'1\'' => \Netzweber\NwCitavi\Xclass\Typo3DbQueryParser::ORDER_FIELD_DESCENDING,
             'reference_type, \'JournalArticle\', \'Book\', \'Contribution\', \'Unknown\', \'SpecialIssue\', \'UnpublishedWork\', \'ConferenceProceedings\', \'BookEdited\', \'Lecture\'' => \Netzweber\NwCitavi\Xclass\Typo3DbQueryParser::ORDER_FIELD_ASCENDING,
-            'parentReferenceType' => \TYPO3\CMS\Extbase\Persistence\QueryInterface::ORDER_DESCENDING,
-            'customField1' => \TYPO3\CMS\Extbase\Persistence\QueryInterface::ORDER_DESCENDING,          
-            'sortDate' => \TYPO3\CMS\Extbase\Persistence\QueryInterface::ORDER_DESCENDING
+            'parentReferenceType' => QueryInterface::ORDER_DESCENDING,
+            'customField1' => QueryInterface::ORDER_DESCENDING,
+            'sortDate' => QueryInterface::ORDER_DESCENDING
           );
         }
-      } else if(is_array($selectedpublicationsreferences)) {      
+      } else if(is_array($selectedpublicationsreferences)) {
         $sorting = '';
         $i = 0;
         foreach($selectedpublicationsreferences as $selectedpublicationsreference) {
@@ -3436,8 +3449,8 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
           } else {
             $sorting .= ', '.$selectedpublicationsreference;
           }
-          $i++; 
-        }      
+          $i++;
+        }
         $ordering = array(
           'uid, '.$sorting =>  \Netzweber\NwCitavi\Xclass\Typo3DbQueryParser::ORDER_FIELD_ASCENDING
         );
@@ -3445,23 +3458,23 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         if(!empty($settings['sorting'])) {
           $ordering = array(
             'reference_type, '.$sort.'' => \Netzweber\NwCitavi\Xclass\Typo3DbQueryParser::ORDER_FIELD_ASCENDING,
-            'parentReferenceType' => \TYPO3\CMS\Extbase\Persistence\QueryInterface::ORDER_DESCENDING,
-            'customField1' => \TYPO3\CMS\Extbase\Persistence\QueryInterface::ORDER_DESCENDING,          
-            'sortDate' => \TYPO3\CMS\Extbase\Persistence\QueryInterface::ORDER_DESCENDING
+            'parentReferenceType' => QueryInterface::ORDER_DESCENDING,
+            'customField1' => QueryInterface::ORDER_DESCENDING,
+            'sortDate' => QueryInterface::ORDER_DESCENDING
           );
         } else {
           $ordering = array(
             'reference_type, \'JournalArticle\', \'Book\', \'Contribution\', \'Unknown\', \'SpecialIssue\', \'UnpublishedWork\'' => \Netzweber\NwCitavi\Xclass\Typo3DbQueryParser::ORDER_FIELD_ASCENDING,
-            'parentReferenceType' => \TYPO3\CMS\Extbase\Persistence\QueryInterface::ORDER_DESCENDING,
-            'customField1' => \TYPO3\CMS\Extbase\Persistence\QueryInterface::ORDER_DESCENDING,          
-            'sortDate' => \TYPO3\CMS\Extbase\Persistence\QueryInterface::ORDER_DESCENDING
+            'parentReferenceType' => QueryInterface::ORDER_DESCENDING,
+            'customField1' => QueryInterface::ORDER_DESCENDING,
+            'sortDate' => QueryInterface::ORDER_DESCENDING
           );
         }
       }
-      
+
       return $ordering;
     }
-    
+
     /**
   	 * action importExport
   	 * @return \string JSON
@@ -3474,16 +3487,16 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       if(is_writeable($this->dir)) {
         if ($_FILES['file'] && $_POST['import_key']) {
           $this->fileProcessor = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Utility\\File\\ExtendedFileUtility');
-     
+
     		  $fileName = $this->fileProcessor->getUniqueName(
     			  $_FILES['file']['name'],
             $this->dir
           );
-          
+
           $upload = \TYPO3\CMS\Core\Utility\GeneralUtility::upload_copy_move(
             $_FILES['file']['tmp_name'],
             $this->dir.$_FILES['file']['name']);
-            
+
           $zip = new \ZipArchive;
           if ($zip->open($fileName) === TRUE) {
             $res = $zip->extractTo($this->dir);
@@ -3502,7 +3515,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
           $this->logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqid.'', '[Citavi Export Upload]: Upload was terminated.', ''.$_POST['import_key'].'');
           $this->getStatusCode(417);
           exit;
-        } 
+        }
       } else {
         $statusCodeText = $this->getStatusCodeText(432);
         $this->logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqid.'', '[Citavi Export Upload]: Upload was terminated.', ''.$_POST['import_key'].'');
@@ -3510,7 +3523,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         exit;
       }
     }
-    
+
     public function checkIfEntryExists($table, $field, $valueObj) {
       $value = (array)$valueObj;
       $res = $GLOBALS['TYPO3_DB']->exec_SELECTquery(
@@ -3522,10 +3535,10 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
   			''
   		);
   		$data = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($res);
-  		
-  		return $data;  
+
+  		return $data;
     }
-    
+
     /**
   	 * action importFile
   	 * @return \string JSON
@@ -3534,29 +3547,29 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/files/');
       if(is_writeable($this->dir)) {
         if ($_FILES['file'] && $_POST['import_key']) {
-          if ($settings['scheduler'] == 1) {            
+          if ($settings['scheduler'] == 1) {
             $originalFilePath = $_FILES['file']['tmp_name'];
             $newFileName = $_FILES['file']['name'];
-            $localDriver = $this->objectManager->get('TYPO3\\CMS\\Core\\Resource\\Driver\\LocalDriver');                    
+            $localDriver = $this->objectManager->get('TYPO3\\CMS\\Core\\Resource\\Driver\\LocalDriver');
             if (!file_exists($this->dir.$localDriver->sanitizeFileName($newFileName))) {
-              $storageRepository = $this->objectManager->get('TYPO3\\CMS\\Core\\Resource\\StorageRepository');              
+              $storageRepository = $this->objectManager->get('TYPO3\\CMS\\Core\\Resource\\StorageRepository');
               $storage = $storageRepository->findByUid((int)$settings['fileStoragePid']);
               $targetFolder = $storage->getFolder('files');
-                          
-      
+
+
               if (file_exists($originalFilePath)) {
                   $movedNewFile = $storage->addFile($originalFilePath, $targetFolder, $newFileName);
                   $newFileReference = $this->objectManager->get('Netzweber\\NwCitavi\\Domain\\Model\\FileReference');
-                  $newFileReference->setFile($movedNewFile);                
+                  $newFileReference->setFile($movedNewFile);
               }
-    
+
               $persistenceManager = $this->objectManager->get("TYPO3\\CMS\\Extbase\\Persistence\\Generic\\PersistenceManager");
               $persistenceManager->persistAll();
-       
+
               file_put_contents($this->dir.'/files.txt', $_POST['referenceId'].'|'.$movedNewFile->getUid().'|'.$_POST['fileType'].chr(13).chr(10), FILE_APPEND);
             }
-            
-            return true;          
+
+            return true;
           } else {
             $referenceQueryResult = $this->findByCitaviId($_POST['referenceId']);
             $reference = $referenceQueryResult[0];
@@ -3564,12 +3577,12 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               if($_POST['fileType'] == 'cover') {
                 $originalFilePath = $_FILES['file']['tmp_name'];
                 $newFileName = $_FILES['file']['name'];
-                $localDriver = $this->objectManager->get('TYPO3\\CMS\\Core\\Resource\\Driver\\LocalDriver');          
+                $localDriver = $this->objectManager->get('TYPO3\\CMS\\Core\\Resource\\Driver\\LocalDriver');
                 if (!file_exists($this->dir.$localDriver->sanitizeFileName($newFileName))) {
                   $storageRepository = $this->objectManager->get('TYPO3\\CMS\\Core\\Resource\\StorageRepository');
                   $storage = $storageRepository->findByUid('3');
                   $targetFolder = $storage->getFolder('files');
-          
+
                   if (file_exists($originalFilePath)) {
                       $movedNewFile = $storage->addFile($originalFilePath, $targetFolder, $newFileName);
                       $newFileReference = $this->objectManager->get('Netzweber\\NwCitavi\\Domain\\Model\\FileReference');
@@ -3577,21 +3590,21 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                       $reference->setCover($newFileReference);
                   }
                   $this->update($reference);
-        
+
                   $persistenceManager = $this->objectManager->get("TYPO3\\CMS\\Extbase\\Persistence\\Generic\\PersistenceManager");
                   $persistenceManager->persistAll();
                 }
               }
-              
+
               if($_POST['fileType'] == 'attachment') {
                 $originalFilePath = $_FILES['file']['tmp_name'];
                 $newFileName = $_FILES['file']['name'];
-                $localDriver = $this->objectManager->get('TYPO3\\CMS\\Core\\Resource\\Driver\\LocalDriver');          
+                $localDriver = $this->objectManager->get('TYPO3\\CMS\\Core\\Resource\\Driver\\LocalDriver');
                 if (!file_exists($this->dir.$localDriver->sanitizeFileName($newFileName))) {
                   $storageRepository = $this->objectManager->get('TYPO3\\CMS\\Core\\Resource\\StorageRepository');
                   $storage = $storageRepository->findByUid('3');
                   $targetFolder = $storage->getFolder('files');
-          
+
                   if (file_exists($originalFilePath)) {
                       $movedNewFile = $storage->addFile($originalFilePath, $targetFolder, $newFileName);
                       $newFileReference = $this->objectManager->get('Netzweber\\NwCitavi\\Domain\\Model\\FileReference');
@@ -3601,12 +3614,12 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                       }
                   }
                   $this->update($reference);
-        
+
                   $persistenceManager = $this->objectManager->get("TYPO3\\CMS\\Extbase\\Persistence\\Generic\\PersistenceManager");
                   $persistenceManager->persistAll();
                 }
               }
-            }        
+            }
             return true;
           }
         } else {
@@ -3614,7 +3627,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
           $logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqid.'', '[Citavi Upload]: Upload was terminated.', ''.$_POST['import_key'].'', $settings['sPid']);
           $this->getStatusCode(417);
           exit;
-        } 
+        }
       } else {
         $statusCodeText = $this->getStatusCodeText(432);
         $logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqid.'', '[Citavi Upload]: Upload was terminated.', ''.$_POST['import_key'].'', $settings['sPid']);
@@ -3622,7 +3635,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         exit;
       }
     }
-    
+
     public function findAllReferenceTypOptions() {
       $res = $GLOBALS['TYPO3_DB']->exec_SELECTquery(
   		  'reference_type',
@@ -3633,24 +3646,24 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
   			''
   		);
       if ($GLOBALS['TYPO3_DB']->sql_num_rows($res)) {
-        $i = 0;                             
+        $i = 0;
         while($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($res)){
           $options[$i]['id'] = $row['reference_type'];
-          $options[$i]['title'] = \TYPO3\CMS\Extbase\Utility\LocalizationUtility::translate('tx_nwcitavi_domain_model_reference.'.$row['reference_type'], 'nw_citavi_fe');          
-          $i++;              
+          $options[$i]['title'] = \TYPO3\CMS\Extbase\Utility\LocalizationUtility::translate('tx_nwcitavi_domain_model_reference.'.$row['reference_type'], 'nw_citavi_fe');
+          $i++;
         }
       }
       foreach ($options as $key => $row) {
           $option[$key] = $row['title'];
       }
       array_multisort($option, SORT_ASC, $options);
-      
-      return $options;   
+
+      return $options;
     }
-    
+
     public function displayAdvancedSearch($settings) {
       $res = false;
-      if($settings['searchYearfrom'] && $settings['searchYearfrom'] != '-1') $res = true; 
+      if($settings['searchYearfrom'] && $settings['searchYearfrom'] != '-1') $res = true;
       if($settings['searchYearto'] && $settings['searchYearto'] != '-1') $res = true;
       if($settings['searchReferencetype'] && $settings['searchReferencetype'] != '-1') $res = true;
       if($settings['searchCategories'] && $settings['searchCategories'] != '-1') $res = true;
@@ -3665,26 +3678,26 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       if($settings['searchPublishers'] && $settings['searchPublishers'] != '-1') $res = true;
       if($settings['searchSeriestitles'] && $settings['searchSeriestitles'] != '-1') $res = true;
       if($settings['searchSpecialcategories'] && $settings['searchSpecialcategories'] != '-1') $res = true;
-      
-      return $res;    
+
+      return $res;
     }
-    
+
     public function getRootpage($objectManager) {
-      $pageRepository = $objectManager->get('TYPO3\CMS\Frontend\Page\PageRepository');  
-      $pageRepository->init(FALSE); 
+      $pageRepository = $objectManager->get('TYPO3\CMS\Frontend\Page\PageRepository');
+      $pageRepository->init(FALSE);
       $defaultPageIds = \array_keys($pageRepository->getMenu(0, 'uid'));
       return $defaultPageIds[0];
     }
-    
+
     /**
     * Render the generated SQL of a query in TYPO3 8
-    * 
-    * @param \TYPO3\CMS\Extbase\Persistence\QueryInterface $query
+    *
+    * @param QueryInterface $query
     * @param bool $format
     * @param bool $exit
     */
     private function debugQuery($query, $format = true, $exit = true)
     {
       function getFormattedSQL($sql_raw) { if (empty($sql_raw) || !is_string($sql_raw)) { return false; } $sql_reserved_all = array( 'ACCESSIBLE', 'ACTION', 'ADD', 'AFTER', 'AGAINST', 'AGGREGATE', 'ALGORITHM', 'ALL', 'ALTER', 'ANALYSE', 'ANALYZE', 'AND', 'AS', 'ASC', 'AUTOCOMMIT', 'AUTO_INCREMENT', 'AVG_ROW_LENGTH', 'BACKUP', 'BEGIN', 'BETWEEN', 'BINLOG', 'BOTH', 'BY', 'CASCADE', 'CASE', 'CHANGE', 'CHANGED', 'CHARSET', 'CHECK', 'CHECKSUM', 'COLLATE', 'COLLATION', 'COLUMN', 'COLUMNS', 'COMMENT', 'COMMIT', 'COMMITTED', 'COMPRESSED', 'CONCURRENT', 'CONSTRAINT', 'CONTAINS', 'CONVERT', 'CREATE', 'CROSS', 'CURRENT_TIMESTAMP', 'DATABASE', 'DATABASES', 'DAY', 'DAY_HOUR', 'DAY_MINUTE', 'DAY_SECOND', 'DEFINER', 'DELAYED', 'DELAY_KEY_WRITE', 'DELETE', 'DESC', 'DESCRIBE', 'DETERMINISTIC', 'DISTINCT', 'DISTINCTROW', 'DIV', 'DO', 'DROP', 'DUMPFILE', 'DUPLICATE', 'DYNAMIC', 'ELSE', 'ENCLOSED', 'END', 'ENGINE', 'ENGINES', 'ESCAPE', 'ESCAPED', 'EVENTS', 'EXECUTE', 'EXISTS', 'EXPLAIN', 'EXTENDED', 'FAST', 'FIELDS', 'FILE', 'FIRST', 'FIXED', 'FLUSH', 'FOR', 'FORCE', 'FOREIGN', 'FROM', 'FULL', 'FULLTEXT', 'FUNCTION', 'GEMINI', 'GEMINI_SPIN_RETRIES', 'GLOBAL', 'GRANT', 'GRANTS', 'GROUP', 'HAVING', 'HEAP', 'HIGH_PRIORITY', 'HOSTS', 'HOUR', 'HOUR_MINUTE', 'HOUR_SECOND', 'IDENTIFIED', 'IF', 'IGNORE', 'IN', 'INDEX', 'INDEXES', 'INFILE', 'INNER', 'INSERT', 'INSERT_ID', 'INSERT_METHOD', 'INTERVAL', 'INTO', 'INVOKER', 'IS', 'ISOLATION', 'JOIN', 'KEY', 'KEYS', 'KILL', 'LAST_INSERT_ID', 'LEADING', 'LEFT', 'LEVEL', 'LIKE', 'LIMIT', 'LINEAR', 'LINES', 'LOAD', 'LOCAL', 'LOCK', 'LOCKS', 'LOGS', 'LOW_PRIORITY', 'MARIA', 'MASTER', 'MASTER_CONNECT_RETRY', 'MASTER_HOST', 'MASTER_LOG_FILE', 'MASTER_LOG_POS', 'MASTER_PASSWORD', 'MASTER_PORT', 'MASTER_USER', 'MATCH', 'MAX_CONNECTIONS_PER_HOUR', 'MAX_QUERIES_PER_HOUR', 'MAX_ROWS', 'MAX_UPDATES_PER_HOUR', 'MAX_USER_CONNECTIONS', 'MEDIUM', 'MERGE', 'MINUTE', 'MINUTE_SECOND', 'MIN_ROWS', 'MODE', 'MODIFY', 'MONTH', 'MRG_MYISAM', 'MYISAM', 'NAMES', 'NATURAL', 'NOT', 'NULL', 'OFFSET', 'ON', 'OPEN', 'OPTIMIZE', 'OPTION', 'OPTIONALLY', 'OR', 'ORDER', 'OUTER', 'OUTFILE', 'PACK_KEYS', 'PAGE', 'PARTIAL', 'PARTITION', 'PARTITIONS', 'PASSWORD', 'PRIMARY', 'PRIVILEGES', 'PROCEDURE', 'PROCESS', 'PROCESSLIST', 'PURGE', 'QUICK', 'RAID0', 'RAID_CHUNKS', 'RAID_CHUNKSIZE', 'RAID_TYPE', 'RANGE', 'READ', 'READ_ONLY', 'READ_WRITE', 'REFERENCES', 'REGEXP', 'RELOAD', 'RENAME', 'REPAIR', 'REPEATABLE', 'REPLACE', 'REPLICATION', 'RESET', 'RESTORE', 'RESTRICT', 'RETURN', 'RETURNS', 'REVOKE', 'RIGHT', 'RLIKE', 'ROLLBACK', 'ROW', 'ROWS', 'ROW_FORMAT', 'SECOND', 'SECURITY', 'SELECT', 'SEPARATOR', 'SERIALIZABLE', 'SESSION', 'SET', 'SHARE', 'SHOW', 'SHUTDOWN', 'SLAVE', 'SONAME', 'SOUNDS', 'SQL', 'SQL_AUTO_IS_NULL', 'SQL_BIG_RESULT', 'SQL_BIG_SELECTS', 'SQL_BIG_TABLES', 'SQL_BUFFER_RESULT', 'SQL_CACHE', 'SQL_CALC_FOUND_ROWS', 'SQL_LOG_BIN', 'SQL_LOG_OFF', 'SQL_LOG_UPDATE', 'SQL_LOW_PRIORITY_UPDATES', 'SQL_MAX_JOIN_SIZE', 'SQL_NO_CACHE', 'SQL_QUOTE_SHOW_CREATE', 'SQL_SAFE_UPDATES', 'SQL_SELECT_LIMIT', 'SQL_SLAVE_SKIP_COUNTER', 'SQL_SMALL_RESULT', 'SQL_WARNINGS', 'START', 'STARTING', 'STATUS', 'STOP', 'STORAGE', 'STRAIGHT_JOIN', 'STRING', 'STRIPED', 'SUPER', 'TABLE', 'TABLES', 'TEMPORARY', 'TERMINATED', 'THEN', 'TO', 'TRAILING', 'TRANSACTIONAL', 'TRUNCATE', 'TYPE', 'TYPES', 'UNCOMMITTED', 'UNION', 'UNIQUE', 'UNLOCK', 'UPDATE', 'USAGE', 'USE', 'USING', 'VALUES', 'VARIABLES', 'VIEW', 'WHEN', 'WHERE', 'WITH', 'WORK', 'WRITE', 'XOR', 'YEAR_MONTH' ); $sql_skip_reserved_words = array('AS', 'ON', 'USING'); $sql_special_reserved_words = array('(', ')'); $sql_raw = str_replace("\n", " ", $sql_raw); $sql_formatted = ""; $prev_word = ""; $word = ""; for ($i = 0, $j = strlen($sql_raw); $i < $j; $i++) { $word .= $sql_raw[$i]; $word_trimmed = trim($word); if ($sql_raw[$i] == " " || in_array($sql_raw[$i], $sql_special_reserved_words)) { $word_trimmed = trim($word); $trimmed_special = false; if (in_array($sql_raw[$i], $sql_special_reserved_words)) { $word_trimmed = substr($word_trimmed, 0, -1); $trimmed_special = true; } $word_trimmed = strtoupper($word_trimmed); if (in_array($word_trimmed, $sql_reserved_all) && !in_array($word_trimmed, $sql_skip_reserved_words)) { if (in_array($prev_word, $sql_reserved_all)) { $sql_formatted .= '<b>' . strtoupper(trim($word)) . '</b>' . '&nbsp;'; } else { $sql_formatted .= '<br/>&nbsp;'; $sql_formatted .= '<b>' . strtoupper(trim($word)) . '</b>' . '&nbsp;'; } $prev_word = $word_trimmed; $word = ""; } else { $sql_formatted .= trim($word) . '&nbsp;'; $prev_word = $word_trimmed; $word = ""; } } } $sql_formatted .= trim($word); return $sql_formatted; } $queryParser = $this->objectManager->get(\TYPO3\CMS\Extbase\Persistence\Generic\Storage\Typo3DbQueryParser::class); $preparedStatement = $queryParser->convertQueryToDoctrineQueryBuilder($query)->getSQL(); $parameters = $queryParser->convertQueryToDoctrineQueryBuilder($query)->getParameters(); $stringParams = []; foreach ($parameters as $key => $parameter) { $stringParams[':' . $key] = $parameter; } $statement = strtr($preparedStatement, $stringParams); if ($format) { echo '<code>' . getFormattedSQL($statement) . '</code>'; } else { echo $statement; } if ($exit) { exit; }
-    }  
+    }
 }
