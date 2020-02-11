@@ -2,10 +2,13 @@
 namespace Netzweber\NwCitavi\Domain\Repository;
 
 use TYPO3\CMS\Core\Database\ConnectionPool;
-use TYPO3\CMS\Core\Utility\DebugUtility;
+use TYPO3\CMS\Core\Resource\Exception\InsufficientFolderAccessPermissionsException;
+use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\Persistence\QueryInterface;
-use TYPO3\CMS\Extbase\Utility\DebuggerUtility;
+use TYPO3\CMS\Extbase\Utility\LocalizationUtility;
+use TYPO3\CMS\Core\Utility\File\ExtendedFileUtility;
+use ZipArchive;
 
 /***
  *
@@ -33,7 +36,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
   	 */
   	protected $logRepository = NULL;
 
-    protected $hashrepository = NULL;
+    protected $hashRepository = NULL;
 
     /**
      * @var array
@@ -45,139 +48,118 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
     public function initializeObject() {
         /** @var $querySettings \TYPO3\CMS\Extbase\Persistence\Generic\Typo3QuerySettings */
         $querySettings = $this->objectManager->get('TYPO3\\CMS\\Extbase\\Persistence\\Generic\\Typo3QuerySettings');
-        // go for $defaultQuerySettings = $this->createQuery()->getQuerySettings(); if you want to make use of the TS persistence.storagePid with defaultQuerySettings(), see #51529 for details
-
-        // don't add the pid constraint
         $querySettings->setRespectStoragePage(FALSE);
-        // set the storagePids to respect
-        //$querySettings->setStoragePageIds(array(1, 26, 989));
-
-        // don't add fields from enablecolumns constraint
-        // this function is deprecated!
-        //$querySettings->setRespectEnableFields(FALSE);
-
-        // define the enablecolumn fields to be ignored
-        // if nothing else is given, all enableFields are ignored
-        //$querySettings->setIgnoreEnableFields(TRUE);
-        // define single fields to be ignored
-        //$querySettings->setEnableFieldsToBeIgnored(array('disabled','starttime'));
-
-        // add deleted rows to the result
-        //$querySettings->setIncludeDeleted(TRUE);
-
-        // don't add sys_language_uid constraint
-        //$querySettings->setRespectSysLanguage(FALSE);
-
-        // perform translation to dedicated language
-        //$querySettings->setSysLanguageUid(42);
         $this->setDefaultQuerySettings($querySettings);
     }
 
     /**
-  	 * action importXML
-  	 * @return \string JSON
-  	 */
-  	public function importXML($uniqid, $logRepository) {
-  	  $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload');
-      file_put_contents($this->dir.'/log/upload.txt', 'importXML|start'.chr(10), FILE_APPEND);
-      $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
-      if(is_writeable($this->dir)) {
-        file_put_contents($this->dir.'/log/upload.txt', 'dir|'.$this->dir.chr(13).chr(10), FILE_APPEND);
-        if ($_POST['import_key']) {
-          file_put_contents($this->dir.'/log/upload.txt', 'import_key|'.$_POST['import_key'].chr(13).chr(10), FILE_APPEND);
-          if($_FILES['file']) {
-            file_put_contents($this->dir.'/log/upload.txt', 'file name|'.$_FILES['file']['name'].chr(13).chr(10), FILE_APPEND);
-            $this->fileProcessor = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Utility\\File\\ExtendedFileUtility');
+     * action importXML
+     *
+     * @param $uniqueId
+     * @param $logRepository
+     * @return string JSON
+     * @throws InsufficientFolderAccessPermissionsException
+     */
+  	public function importXML($uniqueId, $logRepository): ?string
+    {
+        $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload');
+        file_put_contents($dir.'/log/upload.txt', 'importXML|start'.chr(10), FILE_APPEND);
+        $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
+        if(is_writable($dir)) {
+            file_put_contents($dir.'/log/upload.txt', 'dir|'.$dir.chr(13).chr(10), FILE_APPEND);
+            if ($_POST['import_key']) {
+            	file_put_contents($dir.'/log/upload.txt', 'import_key|'.$_POST['import_key'].chr(13).chr(10), FILE_APPEND);
+            	if($_FILES['file']) {
+            		file_put_contents($dir.'/log/upload.txt', 'file name|'.$_FILES['file']['name'].chr(13).chr(10), FILE_APPEND);
+            		$fileProcessor = GeneralUtility::makeInstance(ExtendedFileUtility::class);
 
-      		$fileName = $this->fileProcessor->getUniqueName(
-                $_FILES['file']['name'],
-                $this->dir
-            );
+            		$fileName = $fileProcessor->getUniqueName(
+            				$_FILES['file']['name'],
+                            $dir
+                    );
 
-            $upload = \TYPO3\CMS\Core\Utility\GeneralUtility::upload_copy_move(
-              $_FILES['file']['tmp_name'],
-              $fileName);
+            		GeneralUtility::upload_copy_move(
+            		    $_FILES['file']['tmp_name'],
+                        $fileName
+                    );
 
-            $zip = new \ZipArchive;
-            if ($zip->open($fileName) === TRUE) {
-              $res = $zip->extractTo($this->dir);
-              $zip->close();
-              if($res) {
-                unlink($fileName);
-              }
+            		$zip = new ZipArchive;
+            		if ($zip->open($fileName) === TRUE) {
+            		    $res = $zip->extractTo($dir);
+            		    $zip->close();
+            		    if($res) {
+            		        unlink($fileName);
+            		    }
+            		} else {
+            		    $statusCodeText = $this->getStatusCodeText(418);
+            		    $logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqueId.'', '[Citavi XML Upload]: Upload was terminated.', ''.$_POST['import_key'].'', $settings['sPid']);
+            		    $this->getStatusCode(418);
+            		    file_put_contents($dir.'/log/upload.txt', 'error|418'.chr(13).chr(10), FILE_APPEND);
+            		}
+
+            		$resourceFactory = ResourceFactory::getInstance();
+            		$defaultStorage = $resourceFactory->getDefaultStorage();
+            		$folder = $defaultStorage->getFolder('/user_upload/citavi_upload/');
+            		$files = $defaultStorage->getFilesInFolder($folder);
+            		if(is_array($files)) {
+            		    foreach($files as $file) {
+            		        $thisFile = $file->getProperties();
+            		        if($thisFile['extension'] === 'xml') {
+            		            $folder2 = $defaultStorage->getFolder('/user_upload/citavi_upload/backup/');
+            		            $files2 = $defaultStorage->getFilesInFolder($folder2);
+            		            $uploadDir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+            		            $backupDir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/backup/');
+            		            if(is_array($files2)) {
+            		                $numFiles = count($files2);
+            		                if($numFiles < 10) {
+            		                    GeneralUtility::upload_copy_move(
+            		                        $uploadDir.$thisFile['name'],
+                                            $backupDir.time().'_'.$thisFile['name']
+                                        );
+            		                    return true;
+            		                }
+                                    $i = 0;
+                                    foreach($files2 as $file2) {
+                                        if($i === 0) {
+                                            $thisFile2 = $file2->getProperties();
+                                            unlink($backupDir.$thisFile2['name']);
+                                        }
+                                        $i++;
+                                    }
+                                    GeneralUtility::upload_copy_move(
+                                        $uploadDir.$thisFile['name'],
+                                        $backupDir.time().'_'.$thisFile['name']
+                                    );
+                                    return true;
+                                }
+            		        }
+            		    }
+            		}
+            	} else {
+            	    $statusCodeText = $this->getStatusCodeText(419);
+            	    $logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqueId.'', '[Citavi XML Upload]: Upload was terminated.', ''.$_POST['import_key'].'', $settings['sPid']);
+            	    $this->getStatusCode(419);
+            	    file_put_contents($dir.'/log/upload.txt', 'error|419'.chr(13).chr(10), FILE_APPEND);
+            	}
             } else {
-              $statusCodeText = $this->getStatusCodeText(418);
-              $logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqid.'', '[Citavi XML Upload]: Upload was terminated.', ''.$_POST['import_key'].'', $settings['sPid']);
-              $this->getStatusCode(418);
-              file_put_contents($this->dir.'/log/upload.txt', 'error|418'.chr(13).chr(10), FILE_APPEND);
+                $statusCodeText = $this->getStatusCodeText(417);
+                $logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqueId.'', '[Citavi XML Upload]: Upload was terminated.', ''.$_POST['import_key'].'', $settings['sPid']);
+                $this->getStatusCode(417);
+                file_put_contents($dir.'/log/upload.txt', 'error|417'.chr(13).chr(10), FILE_APPEND);
+                exit;
             }
-
-            $resourceFactory = \TYPO3\CMS\Core\Resource\ResourceFactory::getInstance();
-            $defaultStorage = $resourceFactory->getDefaultStorage();
-            $folder = $defaultStorage->getFolder('/user_upload/citavi_upload/');
-            $files = $defaultStorage->getFilesInFolder($folder);
-            if(is_array($files)) {
-              foreach($files as $file) {
-                $thisFile = $file->getProperties();
-                if($thisFile['extension'] === 'xml') {
-                  $folder2 = $defaultStorage->getFolder('/user_upload/citavi_upload/backup/');
-                  $files2 = $defaultStorage->getFilesInFolder($folder2);
-                  $uploaddir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
-                  $backupdir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/backup/');
-                  if(is_array($files2)) {
-                    $numFiles = count($files2);
-                    if($numFiles < 10) {
-                      // Kopiere die neue Datei in den Ordner
-                      $upload = \TYPO3\CMS\Core\Utility\GeneralUtility::upload_copy_move(
-                        $uploaddir.$thisFile['name'],
-                        $backupdir.time().'_'.$thisFile['name']);
-
-                      return 1;
-                    } else {
-                      // Lösche die älteste Datei
-                      $i = 0;
-                      foreach($files2 as $file2) {
-                        if($i == 0) {
-                          $thisFile2 = $file2->getProperties();
-                          unlink($backupdir.$thisFile2['name']);
-                        }
-                        $i++;
-                      }
-                      // Kopiere die neue Datei in den Ordner
-                      $upload = \TYPO3\CMS\Core\Utility\GeneralUtility::upload_copy_move(
-                        $uploaddir.$thisFile['name'],
-                        $backupdir.time().'_'.$thisFile['name']);
-
-                      return 1;
-                    }
-                  }
-                }
-              }
-            }
-          } else {
-            $statusCodeText = $this->getStatusCodeText(419);
-            $logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqid.'', '[Citavi XML Upload]: Upload was terminated.', ''.$_POST['import_key'].'', $settings['sPid']);
-            $this->getStatusCode(419);
-            file_put_contents($this->dir.'/log/upload.txt', 'error|419'.chr(13).chr(10), FILE_APPEND);
-          }
         } else {
-          $statusCodeText = $this->getStatusCodeText(417);
-          $logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqid.'', '[Citavi XML Upload]: Upload was terminated.', ''.$_POST['import_key'].'', $settings['sPid']);
-          $this->getStatusCode(417);
-          file_put_contents($this->dir.'/log/upload.txt', 'error|417'.chr(13).chr(10), FILE_APPEND);
-          exit;
+            $statusCodeText = $this->getStatusCodeText(432);
+            $logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqueId.'', '[Citavi XML Upload]: Upload was terminated.', ''.$_POST['import_key'].'', $settings['sPid']);
+            $this->getStatusCode(432);
+            file_put_contents($dir.'/log/upload.txt', 'error|432'.chr(13).chr(10), FILE_APPEND);
+            exit;
         }
-      } else {
-        $statusCodeText = $this->getStatusCodeText(432);
-        $logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqid.'', '[Citavi XML Upload]: Upload was terminated.', ''.$_POST['import_key'].'', $settings['sPid']);
-        $this->getStatusCode(432);
-        file_put_contents($this->dir.'/log/upload.txt', 'error|432'.chr(13).chr(10), FILE_APPEND);
-        exit;
-      }
+        return true;
     }
 
-    public function parseXML($step, $startTime, $uniqid, $LogRepository) {
-      $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload');
+    public function parseXML($step, $startTime, $uniqid) {
+      $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload');
       $this->key = $_POST['import_key'];
       $fileInfo = $this->lastModification($this->dir);
       $fileName = $fileInfo['dir'].$fileInfo['file'];
@@ -801,7 +783,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $GLOBALS['TT'] = new \TYPO3\CMS\Core\TimeTracker\NullTimeTracker;
         $GLOBALS['TT']->start();
       }
-      $GLOBALS['TSFE'] = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Frontend\\Controller\\TypoScriptFrontendController',  $GLOBALS['TYPO3_CONF_VARS'], $id, $typeNum);
+      $GLOBALS['TSFE'] = GeneralUtility::makeInstance('TYPO3\\CMS\\Frontend\\Controller\\TypoScriptFrontendController',  $GLOBALS['TYPO3_CONF_VARS'], $id, $typeNum);
       $GLOBALS['TSFE']->connectToDB();
       $GLOBALS['TSFE']->initFEuser();
       $GLOBALS['TSFE']->determineId();
@@ -837,7 +819,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
     }
 
     public function columnExists($repo, $citaviId, $table) {
-      $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+      $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
       switch($repo) {
         case 'CategoryRepository':
           $repository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\CategoryRepository');
@@ -866,7 +848,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
     }
 
     public function setDatabase($ref, $modelTitle, $columnExists, $settings = null, $parent = null) {
-      $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+      $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
       switch($modelTitle) {
         case 'Reference':
           try {
@@ -1377,7 +1359,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
     }
 
     public function getRelatedObjectStorage($keys, $field_name, $table, $repository) {
-      $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+      $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
       $objectRepository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\'.$repository);
       $query = $objectRepository->createQuery();
       $keyArray = explode(";", $keys);
@@ -1413,7 +1395,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
     }
 
     public function getRelatedCategories($categories) {
-      $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+      $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
       $categoryRepository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\CategoryRepository');
       $query = $categoryRepository->createQuery();
       $categoriesArray = explode(";", $categories);
@@ -1445,7 +1427,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
     }
 
     public function updateReferenceLocation($ref, $locationId) {
-      $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+      $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
       $locationRepository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\LocationRepository');
       $refQuery = $this->createQuery();
       $refSql = 'SELECT * FROM tx_nwcitavi_domain_model_reference WHERE citavi_id LIKE \''.$ref['@attributes']['ID'].'\'';
@@ -1472,7 +1454,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
     }
 
     public function updateLocationLibrary($locationId, $libraryId) {
-      $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+      $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
       $locationRepository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\LocationRepository');
       $libraryRepository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\LibraryRepository');
 
@@ -1550,8 +1532,8 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
 
     public function taskParseXMLCategories($numEntries) {
       try {
-        $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-        $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload');
+        $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+        $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload');
         $this->initTSFE($this->getRootpage($objectManager));
         $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
         $check = file_exists($this->dir.'/scheduler.txt');
@@ -1578,7 +1560,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 $this->truncateDatabase('tx_nwcitavi_domain_model_categoryhash');
                 $this->parseCategories($level, $array, $settings);
                 file_put_contents($this->dir.'/task.txt', 1);
-                $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                    'The categories have been created successfully',
                    'Successful',
                    \TYPO3\CMS\Core\Messaging\FlashMessage::OK,
@@ -1586,7 +1568,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 );
               } else {
                 file_put_contents($this->dir.'/task.txt', 1);
-                $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                    'No categories to create',
                    'Info',
                    \TYPO3\CMS\Core\Messaging\FlashMessage::INFO,
@@ -1599,7 +1581,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $messageQueue->addMessage($message);
             } catch (Exception $e) {
               $this->logRepository->addLog(1, 'Categories could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-              $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+              $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                  $e,
                  'Error: Categories could not be generated',
                  \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
@@ -1612,7 +1594,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
             }
             $this->xml->close();
           } else {
-            $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+            $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                'Task parse categories is not your turn',
                'Waiting',
                \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
@@ -1626,7 +1608,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         }
       } catch (Exception $e) {
         $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-        $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
            $e,
            'Error: Task was terminated',
            \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
@@ -1641,8 +1623,8 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
 
     public function taskParseXMLKeywords($numEntries) {
       try {
-        $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-        $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+        $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+        $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
         $this->initTSFE($this->getRootpage($objectManager));
         $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
         $check = file_exists($this->dir.'/scheduler.txt');
@@ -1689,7 +1671,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   }
                   $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_keyword', 'tx_nwcitavi_domain_model_keywordhash', $settings);
                   file_put_contents($this->dir.'/task.txt', 2);
-                  $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'The keywords have been created successfully',
                      'Successful',
                      \TYPO3\CMS\Core\Messaging\FlashMessage::OK,
@@ -1697,7 +1679,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   );
                 } else {
                   file_put_contents($this->dir.'/task.txt', 2);
-                  $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'No keywords to create',
                      'Info',
                      \TYPO3\CMS\Core\Messaging\FlashMessage::INFO,
@@ -1710,7 +1692,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 $messageQueue->addMessage($message);
               } catch (Exception $e) {
                 $this->logRepository->addLog(1, 'Keywords could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-                $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                    $e,
                    'Error: Keywords could not be generated',
                    \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
@@ -1723,7 +1705,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               }
               $this->xml->close();
             } else {
-              $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+              $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                  'Task parse keywords is not your turn',
                  'Waiting',
                  \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
@@ -1738,7 +1720,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         }
       } catch (Exception $e) {
         $This->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-        $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
            $e,
            'Error: Task was terminated',
            \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
@@ -1753,8 +1735,8 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
 
     public function taskParseXMLLibraries($numEntries) {
       try {
-        $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-        $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+        $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+        $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
         $this->initTSFE($this->getRootpage($objectManager));
         $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
         $check = file_exists($this->dir.'/scheduler.txt');
@@ -1800,7 +1782,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   }
                   $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_library', 'tx_nwcitavi_domain_model_libraryhash', $settings);
                   file_put_contents($this->dir.'/task.txt', 3);
-                  $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'The libraries have been created successfully',
                      'Successful',
                      \TYPO3\CMS\Core\Messaging\FlashMessage::OK,
@@ -1808,7 +1790,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   );
                 } else {
                   file_put_contents($this->dir.'/task.txt', 3);
-                  $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'No libraries to create',
                      'Info',
                      \TYPO3\CMS\Core\Messaging\FlashMessage::INFO,
@@ -1821,7 +1803,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 $messageQueue->addMessage($message);
               } catch (Exception $e) {
                 $this->logRepository->addLog(1, 'Libraries could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-                $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                    $e,
                    'Error: Libraries could not be generated',
                    \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
@@ -1834,7 +1816,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               }
               $this->xml->close();
             } else {
-              $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+              $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                  'Task parse libraries is not your turn',
                  'Waiting',
                  \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
@@ -1849,7 +1831,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         }
       } catch (Exception $e) {
         $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-        $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
            $e,
            'Error: Task was terminated',
            \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
@@ -1864,8 +1846,8 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
 
     public function taskParseXMLPeriodicals($numEntries) {
       try {
-        $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-        $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+        $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+        $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
         $this->initTSFE($this->getRootpage($objectManager));
         $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
         $check = file_exists($this->dir.'/scheduler.txt');
@@ -1911,7 +1893,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   }
                   $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_periodical', 'tx_nwcitavi_domain_model_periodicalhash', $settings);
                   file_put_contents($this->dir.'/task.txt', 4);
-                  $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'The periodicals have been created successfully',
                      'Successful',
                      \TYPO3\CMS\Core\Messaging\FlashMessage::OK,
@@ -1919,7 +1901,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   );
                 } else {
                   file_put_contents($this->dir.'/task.txt', 4);
-                  $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'No periodicals to create',
                      'Info',
                      \TYPO3\CMS\Core\Messaging\FlashMessage::INFO,
@@ -1932,7 +1914,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 $messageQueue->addMessage($message);
               } catch (Exception $e) {
                 $this->logRepository->addLog(1, 'Periodicals could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-                $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                    $e,
                    'Error: Periodicals could not be generated',
                    \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
@@ -1945,7 +1927,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               }
               $this->xml->close();
             } else {
-              $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+              $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                  'Task parse periodicals is not your turn',
                  'Waiting',
                  \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
@@ -1960,7 +1942,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         }
       } catch (Exception $e) {
         $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-        $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
            $e,
            'Error: Task was terminated',
            \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
@@ -1975,8 +1957,8 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
 
     public function taskParseXMLPersons($numEntries) {
       try {
-        $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-        $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+        $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+        $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
         $this->initTSFE($this->getRootpage($objectManager));
         $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
         $check = file_exists($this->dir.'/scheduler.txt');
@@ -2022,7 +2004,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   }
                   $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_person', 'tx_nwcitavi_domain_model_personhash', $settings);
                   file_put_contents($this->dir.'/task.txt', 5);
-                  $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'The persons have been created successfully',
                      'Successful',
                      \TYPO3\CMS\Core\Messaging\FlashMessage::OK,
@@ -2030,7 +2012,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   );
                 } else {
                   file_put_contents($this->dir.'/task.txt', 5);
-                  $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'No persons to create',
                      'Info',
                      \TYPO3\CMS\Core\Messaging\FlashMessage::INFO,
@@ -2043,7 +2025,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 $messageQueue->addMessage($message);
               } catch (Exception $e) {
                 $this->logRepository->addLog(1, 'Persons could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-                $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                    $e,
                    'Error: Persons could not be generated',
                    \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
@@ -2056,7 +2038,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               }
               $this->xml->close();
             } else {
-              $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+              $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                  'Task parse persons is not your turn',
                  'Waiting',
                  \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
@@ -2071,7 +2053,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         }
       } catch (Exception $e) {
         $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-        $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
            $e,
            'Error: Task was terminated',
            \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
@@ -2086,8 +2068,8 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
 
     public function taskParseXMLPublishers($numEntries) {
       try {
-        $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-        $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+        $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+        $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
         $this->initTSFE($this->getRootpage($objectManager));
         $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
         $check = file_exists($this->dir.'/scheduler.txt');
@@ -2133,7 +2115,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   }
                   $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_publisher', 'tx_nwcitavi_domain_model_publisherhash', $settings);
                   file_put_contents($this->dir.'/task.txt', 6);
-                  $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'The publishers have been created successfully',
                      'Successful',
                      \TYPO3\CMS\Core\Messaging\FlashMessage::OK,
@@ -2141,7 +2123,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   );
                 } else {
                   file_put_contents($this->dir.'/task.txt', 6);
-                  $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'No publishers to create',
                      'Info',
                      \TYPO3\CMS\Core\Messaging\FlashMessage::INFO,
@@ -2154,7 +2136,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 $messageQueue->addMessage($message);
               } catch (Exception $e) {
                 $this->logRepository->addLog(1, 'Publishers could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-                $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                    $e,
                    'Error: Publishers could not be generated',
                    \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
@@ -2167,7 +2149,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               }
               $this->xml->close();
             } else {
-              $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+              $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                  'Task parse publishers is not your turn',
                  'Waiting',
                  \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
@@ -2182,7 +2164,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         }
       } catch (Exception $e) {
         $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-        $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
            $e,
            'Error: Task was terminated',
            \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
@@ -2197,8 +2179,8 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
 
     public function taskParseXMLSeriestitles($numEntries) {
       try {
-        $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-        $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+        $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+        $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
         $this->initTSFE($this->getRootpage($objectManager));
         $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
         $check = file_exists($this->dir.'/scheduler.txt');
@@ -2244,7 +2226,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   }
                   $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_seriestitle', 'tx_nwcitavi_domain_model_seriestitlehash', $settings);
                   file_put_contents($this->dir.'/task.txt', 7);
-                  $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'The seriestitles have been created successfully',
                      'Successful',
                      \TYPO3\CMS\Core\Messaging\FlashMessage::OK,
@@ -2252,7 +2234,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   );
                 } else {
                   file_put_contents($this->dir.'/task.txt', 7);
-                  $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'No seriestitles to create',
                      'Info',
                      \TYPO3\CMS\Core\Messaging\FlashMessage::INFO,
@@ -2265,7 +2247,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 $messageQueue->addMessage($message);
               } catch (Exception $e) {
                 $this->logRepository->addLog(1, 'Seriestitles could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-                $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                    $e,
                    'Error: Seriestitles could not be generated',
                    \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
@@ -2278,7 +2260,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               }
               $this->xml->close();
             } else {
-              $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+              $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                  'Task parse publishers is not your turn',
                  'Waiting',
                  \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
@@ -2293,7 +2275,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         }
       } catch (Exception $e) {
         $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-        $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
            $e,
            'Error: Task was terminated',
            \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
@@ -2308,8 +2290,8 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
 
     public function taskParseXMLKnowledgeitems($numEntries) {
       try {
-        $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-        $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+        $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+        $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
         $this->initTSFE($this->getRootpage($objectManager));
         $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
         $check = file_exists($this->dir.'/scheduler.txt');
@@ -2355,7 +2337,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   }
                   $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_knowledgeitem', 'tx_nwcitavi_domain_model_knowledgeitemhash', $settings);
                   file_put_contents($this->dir.'/task.txt', 8);
-                  $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'The knowledgeitems have been created successfully',
                      'Successful',
                      \TYPO3\CMS\Core\Messaging\FlashMessage::OK,
@@ -2363,7 +2345,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   );
                 } else {
                   file_put_contents($this->dir.'/task.txt', 8);
-                  $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'No knowledgeitems to create',
                      'Info',
                      \TYPO3\CMS\Core\Messaging\FlashMessage::INFO,
@@ -2376,7 +2358,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 $messageQueue->addMessage($message);
               } catch (Exception $e) {
                 $this->logRepository->addLog(1, 'Knowledgeitems could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-                $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                    $e,
                    'Error: Knowledgeitems could not be generated',
                    \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
@@ -2389,7 +2371,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               }
               $this->xml->close();
             } else {
-              $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+              $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                  'Task parse publishers is not your turn',
                  'Waiting',
                  \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
@@ -2404,7 +2386,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         }
       } catch (Exception $e) {
         $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-        $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
            $e,
            'Error: Task was terminated',
            \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
@@ -2419,8 +2401,8 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
 
     public function taskParseXMLReferences($numEntries) {
       try {
-        $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-        $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+        $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+        $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
         $this->initTSFE($this->getRootpage($objectManager));
         $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
         $check = file_exists($this->dir.'/scheduler.txt');
@@ -2519,7 +2501,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   }
                   $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_reference', 'tx_nwcitavi_domain_model_referencehash', $settings);
                   file_put_contents($this->dir.'/task.txt', 9);
-                  $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'The references have been created successfully',
                      'Successful',
                      \TYPO3\CMS\Core\Messaging\FlashMessage::OK,
@@ -2527,7 +2509,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   );
                 } else {
                   file_put_contents($this->dir.'/task.txt', 9);
-                  $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'No references to create',
                      'Info',
                      \TYPO3\CMS\Core\Messaging\FlashMessage::INFO,
@@ -2540,7 +2522,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 $messageQueue->addMessage($message);
               } catch (Exception $e) {
                 $this->logRepository->addLog(1, 'References could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-                $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                    $e,
                    'Error: References could not be generated',
                    \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
@@ -2553,7 +2535,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               }
               $this->xml->close();
             } else {
-              $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+              $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                  'Task parse publishers is not your turn',
                  'Waiting',
                  \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
@@ -2568,7 +2550,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         }
       } catch (Exception $e) {
         $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-        $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
            $e,
            'Error: Task was terminated',
            \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
@@ -2583,8 +2565,8 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
 
     public function taskParseXMLLocations($numEntries) {
       try {
-        $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-        $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+        $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+        $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
         $this->initTSFE($this->getRootpage($objectManager));
         $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
         $check = file_exists($this->dir.'/scheduler.txt');
@@ -2669,7 +2651,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   }
                   $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_location', 'tx_nwcitavi_domain_model_locationhash', $settings);
                   file_put_contents($this->dir.'/task.txt', 10);
-                  $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'The locations have been created successfully',
                      'Successful',
                      \TYPO3\CMS\Core\Messaging\FlashMessage::OK,
@@ -2677,7 +2659,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   );
                 } else {
                   file_put_contents($this->dir.'/task.txt', 10);
-                  $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'No locations to create',
                      'Info',
                      \TYPO3\CMS\Core\Messaging\FlashMessage::INFO,
@@ -2690,7 +2672,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 $messageQueue->addMessage($message);
               } catch (Exception $e) {
                 $this->logRepository->addLog(1, 'Locations could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-                $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                    $e,
                    'Error: Locations could not be generated',
                    \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
@@ -2703,7 +2685,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               }
               $this->xml->close();
             } else {
-              $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+              $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                  'Task parse publishers is not your turn',
                  'Waiting',
                  \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
@@ -2718,7 +2700,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         }
       } catch (Exception $e) {
         $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-        $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
            $e,
            'Error: Task was terminated',
            \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
@@ -2733,8 +2715,8 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
 
     public function taskParseXMLFiles($numEntries) {
       try {
-        $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-        $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+        $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+        $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
         $this->initTSFE($this->getRootpage($objectManager));
         $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
         $check = file_exists($this->dir.'/scheduler.txt');
@@ -2752,7 +2734,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
 
                 if(file_exists($fileName)) {
                   $this->logRepository->addLog(1, 'File "'.$fileName.'" could not be deleted', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task still working.', ''.$this->key.'', $settings['sPid']);
-                  $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'File "'.$fileName.'" could not be deleted',
                      'Warning',
                      \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
@@ -2766,7 +2748,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               }
 
               // FileReference erstellen
-              $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/files/');
+              $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/files/');
               $filecheck = file_exists($this->dir.'/files.txt');
               if($filecheck) {
                 $file = $this->dir.'/files.txt';
@@ -2786,7 +2768,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
 
                 if(file_exists($this->dir.'/files.txt')) {
                   $this->logRepository->addLog(1, 'File "'.$this->dir.'/files.txt" could not be deleted', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task still working.', ''.$this->key.'', $settings['sPid']);
-                  $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'File "'.$this->dir.'/files.txt" could not be deleted',
                      'Warning',
                      \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
@@ -2798,7 +2780,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   $messageQueue->addMessage($message);
                 }
               }
-              $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+              $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                  'The files have been created successfully',
                  'Successful',
                  \TYPO3\CMS\Core\Messaging\FlashMessage::OK,
@@ -2809,14 +2791,14 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
               $messageQueue->addMessage($message);
 
-              $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+              $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
               file_put_contents($this->dir.'/task.txt', 11);
             }
           }
         }
       } catch (Exception $e) {
         $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-        $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
            $e,
            'Error: Task was terminated',
            \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
@@ -2831,8 +2813,8 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
 
     public function taskParseXMLCleaner($numEntries) {
       try {
-        $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-        $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+        $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+        $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
         $this->initTSFE($this->getRootpage($objectManager));
         $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
         $check = file_exists($this->dir.'/scheduler.txt');
@@ -2848,7 +2830,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
 
               if(file_exists($this->dir.'/scheduler.txt')) {
                 $this->logRepository->addLog(1, 'File "'.$this->dir.'/scheduler.txt" could not be deleted', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task still working.', ''.$this->key.'', $settings['sPid']);
-                $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                    'File "'.$this->dir.'/scheduler.txt" could not be deleted',
                    'Warning',
                    \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
@@ -2864,7 +2846,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
 
               if(file_exists($this->dir.'/task.txt')) {
                 $this->logRepository->addLog(1, 'File "'.$this->dir.'/task.txt" could not be deleted', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task still working.', ''.$this->key.'', $settings['sPid']);
-                $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                    'File "'.$this->dir.'/task.txt" could not be deleted',
                    'Warning',
                    \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
@@ -2880,7 +2862,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         }
       } catch (Exception $e) {
         $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-        $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
            $e,
            'Error: Task was terminated',
            \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
@@ -2896,7 +2878,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
     public function setFileReferences($referenceId, $file, $fileType, $settings) {
       $reference = $this->getByCitaviId($referenceId);
       if($reference) {
-        $resourceFactory = \TYPO3\CMS\Core\Resource\ResourceFactory::getInstance();
+        $resourceFactory = ResourceFactory::getInstance();
         $fileReference = $resourceFactory->getFileObject((int)$file);
         $newFileReference = $this->objectManager->get('Netzweber\\NwCitavi\\Domain\\Model\\FileReference');
         $newFileReference->setFile($fileReference);
@@ -2919,17 +2901,16 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
     }
 
     public function getByCitaviId($referenceId) {
-      $query = $this->createQuery();
-      $sql = 'SELECT * FROM tx_nwcitavi_domain_model_reference WHERE citavi_id LIKE \''.$referenceId.'\'';
-      $query->statement($sql);
-      $res = $query->execute();
-      $i = 0;
-      foreach($res as $obj) {
-        $reference = $obj;
-        $i++;
-      }
-      return $reference;
-    }
+        $reference = null;
+  	    $query = $this->createQuery();
+  	    $sql = 'SELECT * FROM tx_nwcitavi_domain_model_reference WHERE citavi_id LIKE \''.$referenceId.'\'';
+  	    $query->statement($sql);
+  	    $res = $query->execute();
+  	    foreach($res as $obj) {
+  	        $reference = $obj;
+  	    }
+  	    return $reference;
+  	}
 
     public function findAllByFilter($settings, $page) {
   	    $query = $this->createQuery();
@@ -2959,398 +2940,483 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
 
     public function numAllByFilter($settings): int
     {
-  		$query = $this->createQuery();
+        $query = $this->createQuery();
   		$query->matching($query->logicalAnd($this->getAndOrConstraints($query, $settings)));
   		return $query->count();
     }
 
-    public function getAndOrConstraints($query, $settings) {
+    /**
+     * @param $query
+     * @param $settings
+     * @return array
+     */
+    public function getAndOrConstraints($query, $settings): array
+    {
+        $selectedAuthor = null;
+  	    $authorConstraints = null;
+        $author = null;
+        $selectedPublisher = null;
+        $publisher = null;
+        $publisherConstraints = null;
+        $selectedReferenceType = null;
+        $referenceType = null;
+        $referenceTypeConstraints = null;
+        $selectedKeyword = null;
+        $keyword = null;
+        $keywordsConstraints = null;
+        $selectedCategory = null;
+        $category = null;
+        $categoryConstraints = null;
+        $categoriesConstraints = null;
+        $selectedPersons = null;
+        $person = null;
+        $personsConstraints = null;
+        $selectedEditors = null;
+        $editor = null;
+        $editorsConstraints = null;
+        $selectedAuthors = null;
+        $authorsConstraints = null;
+        $selectedSpecialCategories = null;
+        $specialCategory = null;
+        $specialCategoriesConstraints = null;
+        $selectedSeriesTitle = null;
+        $seriesTitle = null;
+        $seriesTitlesConstraints = null;
+        $selectedPeriodical = null;
+        $periodical = null;
+        $periodicalsConstraints = null;
   	    $constraints[] = $query->like('literaturlistId', $settings['import_key']);
-  	    if($settings['searchstr'] != '') {
+  	    if($settings['searchstr'] !== '') {
   	        switch($settings['searchOptions']) {
-          case 'title':
-            $constraints[] = $query->logicalAnd(
-              $query->logicalOr(
-                $query->like('title', '%'.$settings['searchstr'].'%'),
-                $query->like('title', ''.$settings['searchstr'].'%'),
-                $query->like('title', '%'.$settings['searchstr'].'')
-              )
-            );
-            break;
-          case 'abstract':
-            $constraints[] = $query->logicalAnd(
-              $query->logicalOr(
-                $query->like('abstract', '%'.$settings['searchstr'].'%'),
-                $query->like('abstract', ''.$settings['searchstr'].'%'),
-                $query->like('abstract', '%'.$settings['searchstr'].'')
-              )
-            );
-            break;
-          case 'author':
-            $constraints[] = $query->logicalAnd(
-              $query->logicalOr(
-                $query->like('authors.firstName', '%'.$settings['searchstr'].'%'),
-                $query->like('authors.firstName', ''.$settings['searchstr'].'%'),
-                $query->like('authors.firstName', '%'.$settings['searchstr'].''),
-                $query->like('authors.lastName', '%'.$settings['searchstr'].'%'),
-                $query->like('authors.lastName', ''.$settings['searchstr'].'%'),
-                $query->like('authors.lastName', '%'.$settings['searchstr'].'')
-              )
-            );
-            break;
-          case 'keyword':
-            $constraints[] = $query->logicalAnd(
-              $query->logicalOr(
-                $query->like('keywords.name', '%'.$settings['searchstr'].'%'),
-                $query->like('keywords.name', ''.$settings['searchstr'].'%'),
-                $query->like('keywords.name', '%'.$settings['searchstr'].'')
-              )
-            );
-            break;
-          default:
-            $constraints[] = $query->logicalAnd(
-              $query->logicalOr(
-                $query->like('authors.firstName', '%'.$settings['searchstr'].'%'),
-                $query->like('authors.firstName', ''.$settings['searchstr'].'%'),
-                $query->like('authors.firstName', '%'.$settings['searchstr'].''),
-                $query->like('authors.lastName', '%'.$settings['searchstr'].'%'),
-                $query->like('authors.lastName', ''.$settings['searchstr'].'%'),
-                $query->like('authors.lastName', '%'.$settings['searchstr'].''),
-                $query->like('editors.firstName', '%'.$settings['searchstr'].'%'),
-                $query->like('editors.firstName', ''.$settings['searchstr'].'%'),
-                $query->like('editors.firstName', '%'.$settings['searchstr'].''),
-                $query->like('editors.lastName', '%'.$settings['searchstr'].'%'),
-                $query->like('editors.lastName', ''.$settings['searchstr'].'%'),
-                $query->like('editors.lastName', '%'.$settings['searchstr'].''),
-                $query->like('othersInvolved.firstName', '%'.$settings['searchstr'].'%'),
-                $query->like('othersInvolved.firstName', ''.$settings['searchstr'].'%'),
-                $query->like('othersInvolved.firstName', '%'.$settings['searchstr'].''),
-                $query->like('othersInvolved.lastName', '%'.$settings['searchstr'].'%'),
-                $query->like('othersInvolved.lastName', ''.$settings['searchstr'].'%'),
-                $query->like('othersInvolved.lastName', '%'.$settings['searchstr'].''),
-                $query->like('collaborators.firstName', '%'.$settings['searchstr'].'%'),
-                $query->like('collaborators.firstName', ''.$settings['searchstr'].'%'),
-                $query->like('collaborators.firstName', '%'.$settings['searchstr'].''),
-                $query->like('collaborators.lastName', '%'.$settings['searchstr'].'%'),
-                $query->like('collaborators.lastName', ''.$settings['searchstr'].'%'),
-                $query->like('collaborators.lastName', '%'.$settings['searchstr'].''),
-                $query->like('organizations.firstName', '%'.$settings['searchstr'].'%'),
-                $query->like('organizations.firstName', ''.$settings['searchstr'].'%'),
-                $query->like('organizations.firstName', '%'.$settings['searchstr'].''),
-                $query->like('organizations.lastName', '%'.$settings['searchstr'].'%'),
-                $query->like('organizations.lastName', ''.$settings['searchstr'].'%'),
-                $query->like('organizations.lastName', '%'.$settings['searchstr'].''),
-                $query->like('title', '%'.$settings['searchstr'].'%'),
-                $query->like('title', ''.$settings['searchstr'].'%'),
-                $query->like('title', '%'.$settings['searchstr'].''),
-                $query->like('abstract', '%'.$settings['searchstr'].'%'),
-                $query->like('abstract', ''.$settings['searchstr'].'%'),
-                $query->like('abstract', '%'.$settings['searchstr'].''),
-                $query->like('customField1', '%'.$settings['searchstr'].'%'),
-                $query->like('customField1', ''.$settings['searchstr'].'%'),
-                $query->like('customField1', '%'.$settings['searchstr'].''),
-                $query->like('customField2', '%'.$settings['searchstr'].'%'),
-                $query->like('customField2', ''.$settings['searchstr'].'%'),
-                $query->like('customField2', '%'.$settings['searchstr'].''),
-                $query->like('customField3', '%'.$settings['searchstr'].'%'),
-                $query->like('customField3', ''.$settings['searchstr'].'%'),
-                $query->like('customField3', '%'.$settings['searchstr'].''),
-                $query->like('customField4', '%'.$settings['searchstr'].'%'),
-                $query->like('customField4', ''.$settings['searchstr'].'%'),
-                $query->like('customField4', '%'.$settings['searchstr'].''),
-                $query->like('customField5', '%'.$settings['searchstr'].'%'),
-                $query->like('customField5', ''.$settings['searchstr'].'%'),
-                $query->like('customField5', '%'.$settings['searchstr'].''),
-                $query->like('customField6', '%'.$settings['searchstr'].'%'),
-                $query->like('customField6', ''.$settings['searchstr'].'%'),
-                $query->like('customField6', '%'.$settings['searchstr'].''),
-                $query->like('customField7', '%'.$settings['searchstr'].'%'),
-                $query->like('customField7', ''.$settings['searchstr'].'%'),
-                $query->like('customField7', '%'.$settings['searchstr'].''),
-                $query->like('customField8', '%'.$settings['searchstr'].'%'),
-                $query->like('customField8', ''.$settings['searchstr'].'%'),
-                $query->like('customField8', '%'.$settings['searchstr'].''),
-                $query->like('customField9', '%'.$settings['searchstr'].'%'),
-                $query->like('customField9', ''.$settings['searchstr'].'%'),
-                $query->like('customField9', '%'.$settings['searchstr'].''),
-                $query->like('subtitle', '%'.$settings['searchstr'].'%'),
-                $query->like('subtitle', ''.$settings['searchstr'].'%'),
-                $query->like('subtitle', '%'.$settings['searchstr'].''),
-                $query->like('titleSupplement', '%'.$settings['searchstr'].'%'),
-                $query->like('titleSupplement', ''.$settings['searchstr'].'%'),
-                $query->like('titleSupplement', '%'.$settings['searchstr'].''),
-                $query->like('bookYear', '%'.$settings['searchstr'].'%'),
-                $query->like('bookYear', ''.$settings['searchstr'].'%'),
-                $query->like('bookYear', '%'.$settings['searchstr'].''),
-                $query->like('placeOfPublication', '%'.$settings['searchstr'].'%'),
-                $query->like('placeOfPublication', ''.$settings['searchstr'].'%'),
-                $query->like('placeOfPublication', '%'.$settings['searchstr'].''),
-                $query->like('edition', '%'.$settings['searchstr'].'%'),
-                $query->like('edition', ''.$settings['searchstr'].'%'),
-                $query->like('edition', '%'.$settings['searchstr'].''),
-                $query->like('iSBN', '%'.$settings['searchstr'].'%'),
-                $query->like('iSBN', ''.$settings['searchstr'].'%'),
-                $query->like('iSBN', '%'.$settings['searchstr'].''),
-                $query->like('bookNote', '%'.$settings['searchstr'].'%'),
-                $query->like('bookNote', ''.$settings['searchstr'].'%'),
-                $query->like('bookNote', '%'.$settings['searchstr'].''),
-                $query->like('parallelTitle', '%'.$settings['searchstr'].'%'),
-                $query->like('parallelTitle', ''.$settings['searchstr'].'%'),
-                $query->like('parallelTitle', '%'.$settings['searchstr'].''),
-                $query->like('titleInOtherLanguages', '%'.$settings['searchstr'].'%'),
-                $query->like('titleInOtherLanguages', ''.$settings['searchstr'].'%'),
-                $query->like('titleInOtherLanguages', '%'.$settings['searchstr'].''),
-                $query->like('translatedTitle', '%'.$settings['searchstr'].'%'),
-                $query->like('translatedTitle', ''.$settings['searchstr'].'%'),
-                $query->like('translatedTitle', '%'.$settings['searchstr'].''),
-                $query->like('evaluation', '%'.$settings['searchstr'].'%'),
-                $query->like('evaluation', ''.$settings['searchstr'].'%'),
-                $query->like('evaluation', '%'.$settings['searchstr'].''),
-                $query->like('shortTitle', '%'.$settings['searchstr'].'%'),
-                $query->like('shortTitle', ''.$settings['searchstr'].'%'),
-                $query->like('shortTitle', '%'.$settings['searchstr'].''),
-                $query->like('tableOfContents', '%'.$settings['searchstr'].'%'),
-                $query->like('tableOfContents', ''.$settings['searchstr'].'%'),
-                $query->like('tableOfContents', '%'.$settings['searchstr'].'')
-              )
-            );
+  	            case 'title':
+  	                $constraints[] = $query->logicalAnd(
+  	                    $query->logicalOr(
+  	                    	$query->like('title', '%'.$settings['searchstr'].'%'),
+                            $query->like('title', ''.$settings['searchstr'].'%'),
+                            $query->like('title', '%'.$settings['searchstr'].'')
+                        )
+                    );
+  	                break;
+  	            case 'abstract':
+  	                $constraints[] = $query->logicalAnd(
+  	                    $query->logicalOr(
+  	                        $query->like('abstract', '%'.$settings['searchstr'].'%'),
+                            $query->like('abstract', ''.$settings['searchstr'].'%'),
+                            $query->like('abstract', '%'.$settings['searchstr'].'')
+                        )
+                    );
+  	                break;
+  	            case 'author':
+  	                $constraints[] = $query->logicalAnd(
+  	                    $query->logicalOr(
+  	                        $query->like('authors.firstName', '%'.$settings['searchstr'].'%'),
+                            $query->like('authors.firstName', ''.$settings['searchstr'].'%'),
+                            $query->like('authors.firstName', '%'.$settings['searchstr'].''),
+                            $query->like('authors.lastName', '%'.$settings['searchstr'].'%'),
+                            $query->like('authors.lastName', ''.$settings['searchstr'].'%'),
+                            $query->like('authors.lastName', '%'.$settings['searchstr'].'')
+                        )
+                    );
+  	                break;
+  	            case 'keyword':
+  	                $constraints[] = $query->logicalAnd(
+  	                    $query->logicalOr(
+  	                        $query->like('keywords.name', '%'.$settings['searchstr'].'%'),
+                            $query->like('keywords.name', ''.$settings['searchstr'].'%'),
+                            $query->like('keywords.name', '%'.$settings['searchstr'].'')
+                        )
+                    );
+  	                break;
+  	            default:
+  	                $constraints[] = $query->logicalAnd(
+  	                    $query->logicalOr(
+  	                        $query->like('authors.firstName', '%'.$settings['searchstr'].'%'),
+                            $query->like('authors.firstName', ''.$settings['searchstr'].'%'),
+                            $query->like('authors.firstName', '%'.$settings['searchstr'].''),
+                            $query->like('authors.lastName', '%'.$settings['searchstr'].'%'),
+                            $query->like('authors.lastName', ''.$settings['searchstr'].'%'),
+                            $query->like('authors.lastName', '%'.$settings['searchstr'].''),
+                            $query->like('editors.firstName', '%'.$settings['searchstr'].'%'),
+                            $query->like('editors.firstName', ''.$settings['searchstr'].'%'),
+                            $query->like('editors.firstName', '%'.$settings['searchstr'].''),
+                            $query->like('editors.lastName', '%'.$settings['searchstr'].'%'),
+                            $query->like('editors.lastName', ''.$settings['searchstr'].'%'),
+                            $query->like('editors.lastName', '%'.$settings['searchstr'].''),
+                            $query->like('othersInvolved.firstName', '%'.$settings['searchstr'].'%'),
+                            $query->like('othersInvolved.firstName', ''.$settings['searchstr'].'%'),
+                            $query->like('othersInvolved.firstName', '%'.$settings['searchstr'].''),
+                            $query->like('othersInvolved.lastName', '%'.$settings['searchstr'].'%'),
+                            $query->like('othersInvolved.lastName', ''.$settings['searchstr'].'%'),
+                            $query->like('othersInvolved.lastName', '%'.$settings['searchstr'].''),
+                            $query->like('collaborators.firstName', '%'.$settings['searchstr'].'%'),
+                            $query->like('collaborators.firstName', ''.$settings['searchstr'].'%'),
+                            $query->like('collaborators.firstName', '%'.$settings['searchstr'].''),
+                            $query->like('collaborators.lastName', '%'.$settings['searchstr'].'%'),
+                            $query->like('collaborators.lastName', ''.$settings['searchstr'].'%'),
+                            $query->like('collaborators.lastName', '%'.$settings['searchstr'].''),
+                            $query->like('organizations.firstName', '%'.$settings['searchstr'].'%'),
+                            $query->like('organizations.firstName', ''.$settings['searchstr'].'%'),
+                            $query->like('organizations.firstName', '%'.$settings['searchstr'].''),
+                            $query->like('organizations.lastName', '%'.$settings['searchstr'].'%'),
+                            $query->like('organizations.lastName', ''.$settings['searchstr'].'%'),
+                            $query->like('organizations.lastName', '%'.$settings['searchstr'].''),
+                            $query->like('title', '%'.$settings['searchstr'].'%'),
+                            $query->like('title', ''.$settings['searchstr'].'%'),
+                            $query->like('title', '%'.$settings['searchstr'].''),
+                            $query->like('abstract', '%'.$settings['searchstr'].'%'),
+                            $query->like('abstract', ''.$settings['searchstr'].'%'),
+                            $query->like('abstract', '%'.$settings['searchstr'].''),
+                            $query->like('customField1', '%'.$settings['searchstr'].'%'),
+                            $query->like('customField1', ''.$settings['searchstr'].'%'),
+                            $query->like('customField1', '%'.$settings['searchstr'].''),
+                            $query->like('customField2', '%'.$settings['searchstr'].'%'),
+                            $query->like('customField2', ''.$settings['searchstr'].'%'),
+                            $query->like('customField2', '%'.$settings['searchstr'].''),
+                            $query->like('customField3', '%'.$settings['searchstr'].'%'),
+                            $query->like('customField3', ''.$settings['searchstr'].'%'),
+                            $query->like('customField3', '%'.$settings['searchstr'].''),
+                            $query->like('customField4', '%'.$settings['searchstr'].'%'),
+                            $query->like('customField4', ''.$settings['searchstr'].'%'),
+                            $query->like('customField4', '%'.$settings['searchstr'].''),
+                            $query->like('customField5', '%'.$settings['searchstr'].'%'),
+                            $query->like('customField5', ''.$settings['searchstr'].'%'),
+                            $query->like('customField5', '%'.$settings['searchstr'].''),
+                            $query->like('customField6', '%'.$settings['searchstr'].'%'),
+                            $query->like('customField6', ''.$settings['searchstr'].'%'),
+                            $query->like('customField6', '%'.$settings['searchstr'].''),
+                            $query->like('customField7', '%'.$settings['searchstr'].'%'),
+                            $query->like('customField7', ''.$settings['searchstr'].'%'),
+                            $query->like('customField7', '%'.$settings['searchstr'].''),
+                            $query->like('customField8', '%'.$settings['searchstr'].'%'),
+                            $query->like('customField8', ''.$settings['searchstr'].'%'),
+                            $query->like('customField8', '%'.$settings['searchstr'].''),
+                            $query->like('customField9', '%'.$settings['searchstr'].'%'),
+                            $query->like('customField9', ''.$settings['searchstr'].'%'),
+                            $query->like('customField9', '%'.$settings['searchstr'].''),
+                            $query->like('subtitle', '%'.$settings['searchstr'].'%'),
+                            $query->like('subtitle', ''.$settings['searchstr'].'%'),
+                            $query->like('subtitle', '%'.$settings['searchstr'].''),
+                            $query->like('titleSupplement', '%'.$settings['searchstr'].'%'),
+                            $query->like('titleSupplement', ''.$settings['searchstr'].'%'),
+                            $query->like('titleSupplement', '%'.$settings['searchstr'].''),
+                            $query->like('bookYear', '%'.$settings['searchstr'].'%'),
+                            $query->like('bookYear', ''.$settings['searchstr'].'%'),
+                            $query->like('bookYear', '%'.$settings['searchstr'].''),
+                            $query->like('placeOfPublication', '%'.$settings['searchstr'].'%'),
+                            $query->like('placeOfPublication', ''.$settings['searchstr'].'%'),
+                            $query->like('placeOfPublication', '%'.$settings['searchstr'].''),
+                            $query->like('edition', '%'.$settings['searchstr'].'%'),
+                            $query->like('edition', ''.$settings['searchstr'].'%'),
+                            $query->like('edition', '%'.$settings['searchstr'].''),
+                            $query->like('iSBN', '%'.$settings['searchstr'].'%'),
+                            $query->like('iSBN', ''.$settings['searchstr'].'%'),
+                            $query->like('iSBN', '%'.$settings['searchstr'].''),
+                            $query->like('bookNote', '%'.$settings['searchstr'].'%'),
+                            $query->like('bookNote', ''.$settings['searchstr'].'%'),
+                            $query->like('bookNote', '%'.$settings['searchstr'].''),
+                            $query->like('parallelTitle', '%'.$settings['searchstr'].'%'),
+                            $query->like('parallelTitle', ''.$settings['searchstr'].'%'),
+                            $query->like('parallelTitle', '%'.$settings['searchstr'].''),
+                            $query->like('titleInOtherLanguages', '%'.$settings['searchstr'].'%'),
+                            $query->like('titleInOtherLanguages', ''.$settings['searchstr'].'%'),
+                            $query->like('titleInOtherLanguages', '%'.$settings['searchstr'].''),
+                            $query->like('translatedTitle', '%'.$settings['searchstr'].'%'),
+                            $query->like('translatedTitle', ''.$settings['searchstr'].'%'),
+                            $query->like('translatedTitle', '%'.$settings['searchstr'].''),
+                            $query->like('evaluation', '%'.$settings['searchstr'].'%'),
+                            $query->like('evaluation', ''.$settings['searchstr'].'%'),
+                            $query->like('evaluation', '%'.$settings['searchstr'].''),
+                            $query->like('shortTitle', '%'.$settings['searchstr'].'%'),
+                            $query->like('shortTitle', ''.$settings['searchstr'].'%'),
+                            $query->like('shortTitle', '%'.$settings['searchstr'].''),
+                            $query->like('tableOfContents', '%'.$settings['searchstr'].'%'),
+                            $query->like('tableOfContents', ''.$settings['searchstr'].'%'),
+                            $query->like('tableOfContents', '%'.$settings['searchstr'].'')
+                        )
+                    );
+  	        }
+  	    }
+  	    if($settings['searchReferencetype'] > -1 && !empty($settings['searchReferencetype']) && $settings['searchReferencetype'] !== '') {
+  	        if($settings['searchReferencetype'] === 'JournalArticlepeer-reviewed') {
+  	            $constraints[] = $query->like('referenceType', 'JournalArticle');
+  	            $constraints[] = $query->like('customField1', 'peer-reviewed');
+  	        } else if($settings['searchReferencetype'] === 'JournalArticle') {
+  	            $constraints[] = $query->like('referenceType', $settings['searchReferencetype']);
+  	            $constraints[] = $query->logicalNot(
+  	                $query->like('customField1', 'peer-reviewed')
+                );
+  	        } else if($settings['searchReferencetype'] === 'ContributionBookEdited') {
+  	            $constraints[] = $query->like('referenceType', 'Contribution');
+  	            $constraints[] = $query->like('parentReferenceType', 'BookEdited');
+  	        } else if($settings['searchReferencetype'] === 'ContributionConferenceProceedings') {
+  	            $constraints[] = $query->like('referenceType', 'Contribution');
+  	            $constraints[] = $query->like('parentReferenceType', 'ConferenceProceedings');
+  	        } else {
+  	            $constraints[] = $query->like('referenceType', $settings['searchReferencetype']);
+  	        }
+  	    }
+  	    $selectedAuthor = explode(',', $settings['selectedauthor']);
+  	    if($selectedAuthor[0] === '') {
+  	        unset($selectedAuthor);
+  	    }
+  	    if ( is_array( $selectedAuthor ) ) {
+  	        $numberOfSelectedAuthor = count($selectedAuthor);
+  	        if($numberOfSelectedAuthor > 0) {
+  	            foreach($selectedAuthor as $key => $value) {
+  	                $author[$key] = (int)$value;
+  	            }
+  	            for($i = 0; $i < $numberOfSelectedAuthor; $i++) {
+  	                $authorConstraints[] = $query->contains('authors', $author[$i]);
+  	            }
+  	            $constraints[] = $query->logicalOr(
+  	                $authorConstraints
+                );
+  	        }
+  	    }
+  	    $selectedPublisher = explode(',', $settings['selectedpublisher']);
+  	    if($selectedPublisher[0] === '') {
+            unset($selectedPublisher);
         }
-      }
-
-      if($settings['searchReferencetype'] > -1 && !empty($settings['searchReferencetype']) && $settings['searchReferencetype'] != '') {
-        if($settings['searchReferencetype'] == 'JournalArticlepeer-reviewed') {
-          $constraints[] = $query->like('referenceType', 'JournalArticle');
-          $constraints[] = $query->like('customField1', 'peer-reviewed');
-        } else if($settings['searchReferencetype'] == 'JournalArticle') {
-          $constraints[] = $query->like('referenceType', $settings['searchReferencetype']);
-          $constraints[] = $query->logicalNot(
-            $query->like('customField1', 'peer-reviewed')
-          );
-        } else if($settings['searchReferencetype'] == 'ContributionBookEdited') {
-          $constraints[] = $query->like('referenceType', 'Contribution');
-          $constraints[] = $query->like('parentReferenceType', 'BookEdited');
-        } else if($settings['searchReferencetype'] == 'ContributionConferenceProceedings') {
-          $constraints[] = $query->like('referenceType', 'Contribution');
-          $constraints[] = $query->like('parentReferenceType', 'ConferenceProceedings');
-        } else {
-          $constraints[] = $query->like('referenceType', $settings['searchReferencetype']);
+  	    if ( is_array( $selectedPublisher ) ) {
+  	    	$numberOfSelectedPublisher = count($selectedPublisher);
+  	    	if($numberOfSelectedPublisher > 0) {
+  	    	    foreach($selectedPublisher as $key => $value) {
+  	    	        $publisher[$key] = (int)$value;
+  	    	    }
+  	    	    for($i = 0; $i < $numberOfSelectedPublisher; $i++) {
+  	    	        $publisherConstraints[] = $query->contains('publishers', $publisher[$i]);
+  	    	    }
+  	    	    $constraints[] = $query->logicalOr(
+  	    	        $publisherConstraints
+                );
+  	    	}
+  	    }
+  	    $selectedReferenceType = explode(',', $settings['selectedreferencetype']);
+  	    if($selectedReferenceType[0] === '') {
+            unset($selectedReferenceType);
         }
-      }
-
-      $selectedauthor = explode(",", $settings['selectedauthor']);
-      if($selectedauthor[0] == '') unset($selectedauthor);
-      if ( is_array( $selectedauthor ) ) {
-        $numberOfSelectedauthor = count($selectedauthor);
-        if($numberOfSelectedauthor > 0) {
-          foreach($selectedauthor as $key => $value) {
-            $author[$key] = (int)$value;
-          }
-          for($i = 0; $i < $numberOfSelectedauthor; $i++) {
-            $authorConstraints[] = $query->contains('authors', $author[$i]);
-          }
-          $constraints[] = $query->logicalOr(
-            $authorConstraints
-          );
+  	    if ( is_array( $selectedReferenceType ) ) {
+  	        $numberOfSelectedReferenceType = count($selectedReferenceType);
+  	        if($numberOfSelectedReferenceType > 0) {
+  	            foreach($selectedReferenceType as $key => $value) {
+  	                $referenceType[$key] = $value;
+  	            }
+  	            for($i = 0; $i < $numberOfSelectedReferenceType; $i++) {
+  	                if($referenceType[$i] !== '') {
+  	                    $referenceTypeConstraints[] = $query->like('referenceType', $referenceType[$i]);
+  	                }
+  	            }
+  	            $constraints[] = $query->logicalOr(
+  	                $referenceTypeConstraints
+                );
+  	        }
+  	    }
+  	    $selectedKeyword = explode(',', $settings['selectedkeyword']);
+  	    if($selectedKeyword[0] === '') {
+            unset($selectedKeyword);
         }
-      }
-      $selectedpublisher = explode(",", $settings['selectedpublisher']);
-      if($selectedpublisher[0] == '') unset($selectedpublisher);
-      if ( is_array( $selectedpublisher ) ) {
-        $numberOfSelectedpublisher = count($selectedpublisher);
-        if($numberOfSelectedpublisher > 0) {
-          foreach($selectedpublisher as $key => $value) {
-            $publisher[$key] = (int)$value;
-          }
-          for($i = 0; $i < $numberOfSelectedpublisher; $i++) {
-            $publisherConstraints[] = $query->contains('publishers', $publisher[$i]);
-          }
-          $constraints[] = $query->logicalOr(
-            $publisherConstraints
-          );
+  	    if ( is_array( $selectedKeyword ) ) {
+  	        $numberOfSelectedKeyword = count($selectedKeyword);
+  	        if($numberOfSelectedKeyword > 0) {
+  	            foreach($selectedKeyword as $key => $value) {
+  	                $keyword[$key] = (int)$value;
+  	            }
+  	            for($i = 0; $i < $numberOfSelectedKeyword; $i++) {
+  	                $keywordsConstraints[] = $query->contains('keywords', $keyword[$i]);
+  	            }
+  	            $constraints[] = $query->logicalOr(
+  	                $keywordsConstraints
+                );
+  	        }
+  	    }
+        $selectedSeriesTitle = explode(',', $settings['selectedseriestitle']);
+        if($selectedSeriesTitle[0] === '') {
+            unset($selectedSeriesTitle);
         }
-      }
-      $selectedreferencetype = explode(",", $settings['selectedreferencetype']);
-      if($selectedreferencetype[0] == '') unset($selectedreferencetype);
-      if ( is_array( $selectedreferencetype ) ) {
-        $numberOfSelectedreferencetype = count($selectedreferencetype);
-        if($numberOfSelectedreferencetype > 0) {
-          foreach($selectedreferencetype as $key => $value) {
-            $referencetype[$key] = $value;
-          }
-          for($i = 0; $i < $numberOfSelectedreferencetype; $i++) {
-            if($referencetype[$i] != '') {
-              $referenceTypeConstraints[] = $query->like('referenceType', $referencetype[$i]);
+        if ( is_array( $selectedSeriesTitle ) ) {
+            $numberOfSelectedSeriesTitle = count($selectedSeriesTitle);
+            if($numberOfSelectedSeriesTitle > 0) {
+                foreach($selectedSeriesTitle as $key => $value) {
+                    $seriesTitle[$key] = (int)$value;
+                }
+                for($i = 0; $i < $numberOfSelectedSeriesTitle; $i++) {
+                    $seriesTitlesConstraints[] = $query->contains('seriestitles', $seriesTitle[$i]);
+                }
+                $constraints[] = $query->logicalOr(
+                    $seriesTitlesConstraints
+                );
             }
-          }
-          $constraints[] = $query->logicalOr(
-            $referenceTypeConstraints
-          );
         }
-      }
-      $selectedkeyword = explode(",", $settings['selectedkeyword']);
-      if($selectedkeyword[0] == '') unset($selectedkeyword);
-      if ( is_array( $selectedkeyword ) ) {
-        $numberOfSelectedkeyword = count($selectedkeyword);
-        if($numberOfSelectedkeyword > 0) {
-          foreach($selectedkeyword as $key => $value) {
-            $keyword[$key] = (int)$value;
-          }
-          for($i = 0; $i < $numberOfSelectedkeyword; $i++) {
-            $keywordsConstraints[] = $query->contains('keywords', $keyword[$i]);
-          }
-          $constraints[] = $query->logicalOr(
-            $keywordsConstraints
-          );
+        $selectedPeriodical = explode(',', $settings['selectedperiodical']);
+        if($selectedPeriodical[0] === '') {
+            unset($selectedPeriodical);
         }
-      }
-      $subcategories = $this->getSubCategories(explode(",", $settings['selectedcategory']), explode(",", $settings['selectedcategory']), count(explode(",", $settings['selectedcategory'])));
-      if($subcategories) {
-        $selectedcategory = $subcategories;
-      } else {
-        $selectedcategory = explode(",", $settings['selectedcategory']);
-      }
-      if($selectedcategory[0] == '') unset($selectedcategory);
-      if ( is_array( $selectedcategory ) ) {
-        $numberOfSelectedcategory = count($selectedcategory);
-        if($numberOfSelectedcategory > 0) {
-          foreach($selectedcategory as $key => $value) {
-            $category[$key] = (int)$value;
-          }
-          for($i = 0; $i < $numberOfSelectedcategory; $i++) {
-            $categoryConstraints[] = $query->contains('categories', $category[$i]);
-          }
-          $constraints[] = $query->logicalOr(
-            $categoryConstraints
-          );
+        if ( is_array( $selectedPeriodical ) ) {
+            $numberOfSelectedPeriodical = count($selectedPeriodical);
+            if($numberOfSelectedPeriodical > 0) {
+                foreach($selectedPeriodical as $key => $value) {
+                    $periodical[$key] = (int)$value;
+                }
+                for($i = 0; $i < $numberOfSelectedPeriodical; $i++) {
+                    $periodicalsConstraints[] = $query->contains('periodicals', $periodical[$i]);
+                }
+                $constraints[] = $query->logicalOr(
+                    $periodicalsConstraints
+                );
+            }
         }
-      }
-
-      $selectedCategories = explode(",", $settings['searchCategories']);
-      if($selectedCategories[0] == '' || $selectedCategories[0] == '-1') unset($selectedCategories);
-      if ( is_array( $selectedCategories ) ) {
-        $numberOfSelectedCategories = count($selectedCategories);
-        if($numberOfSelectedCategories > 0) {
-          foreach($selectedCategories as $key => $value) {
-            $category[$key] = (int)$value;
-          }
-          for($i = 0; $i < $numberOfSelectedCategories; $i++) {
-            $categoriesConstraints[] = $query->contains('categories', $category[$i]);
-          }
-          $constraints[] = $query->logicalOr(
-            $categoriesConstraints
-          );
+  	    $subcategories = $this->getSubCategories(explode(',', $settings['selectedcategory']), explode(',', $settings['selectedcategory']), count(explode(',', $settings['selectedcategory'])));
+  	    if($subcategories) {
+  	        $selectedCategory = $subcategories;
+  	    } else {
+  	        $selectedCategory = explode(',', $settings['selectedcategory']);
+  	    }
+  	    if($selectedCategory[0] === '') {
+            unset($selectedCategory);
         }
-      }
-
-      $selectedPersons = explode(",", $settings['searchPersons']);
-      if($selectedPersons[0] == '' || $selectedPersons[0] == '-1') unset($selectedPersons);
-      if ( is_array( $selectedPersons ) ) {
-        $numberOfSelectedPersons = count($selectedPersons);
-        if($numberOfSelectedPersons > 0) {
-          foreach($selectedPersons as $key => $value) {
-            $person[$key] = (int)$value;
-          }
-          for($i = 0; $i < $numberOfSelectedPersons; $i++) {
-            $personsConstraints[] = $query->contains('authors', $person[$i]);
-          }
-          $constraints[] = $query->logicalOr(
-            $personsConstraints
-          );
+  	    if ( is_array( $selectedCategory ) ) {
+  	        $numberOfSelectedCategory = count($selectedCategory);
+  	        if($numberOfSelectedCategory > 0) {
+  	            foreach($selectedCategory as $key => $value) {
+  	                $category[$key] = (int)$value;
+  	            }
+  	            for($i = 0; $i < $numberOfSelectedCategory; $i++) {
+  	                $categoryConstraints[] = $query->contains('categories', $category[$i]);
+  	            }
+  	            $constraints[] = $query->logicalOr(
+  	                $categoryConstraints
+                );
+  	        }
+  	    }
+  	    $selectedCategories = explode(',', $settings['searchCategories']);
+  	    if($selectedCategories[0] === '' || $selectedCategories[0] === '-1') {
+            unset($selectedCategories);
         }
-      }
-
-      $selectedEditors = explode(",", $settings['searchEditors']);
-      if($selectedEditors[0] == '' || $selectedEditors[0] == '-1') unset($selectedEditors);
-      if ( is_array( $selectedEditors ) ) {
-        $numberOfSelectedEditors = count($selectedEditors);
-        if($numberOfSelectedEditors > 0) {
-          foreach($selectedEditors as $key => $value) {
-            $editor[$key] = (int)$value;
-          }
-          for($i = 0; $i < $numberOfSelectedEditors; $i++) {
-            $editorsConstraints[] = $query->contains('editors', $editor[$i]);
-          }
-          $constraints[] = $query->logicalOr(
-            $editorsConstraints
-          );
+  	    if ( is_array( $selectedCategories ) ) {
+  	        $numberOfSelectedCategories = count($selectedCategories);
+  	        if($numberOfSelectedCategories > 0) {
+  	            foreach($selectedCategories as $key => $value) {
+  	                $category[$key] = (int)$value;
+  	            }
+  	            for($i = 0; $i < $numberOfSelectedCategories; $i++) {
+  	                $categoriesConstraints[] = $query->contains('categories', $category[$i]);
+  	            }
+  	            $constraints[] = $query->logicalOr(
+  	                $categoriesConstraints
+                );
+  	        }
+  	    }
+  	    $selectedPersons = explode(',', $settings['searchPersons']);
+  	    if($selectedPersons[0] === '' || $selectedPersons[0] === '-1') {
+            unset($selectedPersons);
         }
-      }
-
-      $selectedAuthors = explode(",", $settings['searchAuthors']);
-      if($selectedAuthors[0] == '' || $selectedAuthors[0] == '-1') unset($selectedAuthors);
-      if ( is_array( $selectedAuthors ) ) {
-        $numberOfSelectedAuthors = count($selectedAuthors);
-        if($numberOfSelectedAuthors > 0) {
-          foreach($selectedAuthors as $key => $value) {
-            $author[$key] = (int)$value;
-          }
-          for($i = 0; $i < $numberOfSelectedAuthors; $i++) {
-            $authorsConstraints[] = $query->contains('authors', $author[$i]);
-          }
-          $constraints[] = $query->logicalOr(
-            $authorsConstraints
-          );
+  	    if ( is_array( $selectedPersons ) ) {
+  	        $numberOfSelectedPersons = count($selectedPersons);
+  	        if($numberOfSelectedPersons > 0) {
+  	            foreach($selectedPersons as $key => $value) {
+  	                $person[$key] = (int)$value;
+  	            }
+  	            for($i = 0; $i < $numberOfSelectedPersons; $i++) {
+  	                $personsConstraints[] = $query->contains('authors', $person[$i]);
+  	            }
+  	            $constraints[] = $query->logicalOr(
+  	                $personsConstraints
+                );
+  	        }
+  	    }
+  	    $selectedEditors = explode(',', $settings['searchEditors']);
+  	    if($selectedEditors[0] === '' || $selectedEditors[0] === '-1') {
+            unset($selectedEditors);
         }
-      }
-
-      $selectedSpecialcategories = explode(",", $settings['searchSpecialcategories']);
-      if($selectedSpecialcategories[0] == '' || $selectedSpecialcategories[0] == '-1') unset($selectedSpecialcategories);
-      if ( is_array( $selectedSpecialcategories ) ) {
-        $numberOfSpecialcategories = count($selectedSpecialcategories);
-        if($numberOfSpecialcategories > 0) {
-          foreach($selectedSpecialcategories as $key => $value) {
-            $specialcategory[$key] = (int)$value;
-          }
-          for($i = 0; $i < $numberOfSpecialcategories; $i++) {
-            $specialcategoriesConstraints[] = $query->contains('categories', $specialcategory[$i]);
-          }
-          $constraints[] = $query->logicalOr(
-            $specialcategoriesConstraints
-          );
+  	    if ( is_array( $selectedEditors ) ) {
+  	        $numberOfSelectedEditors = count($selectedEditors);
+  	        if($numberOfSelectedEditors > 0) {
+  	            foreach($selectedEditors as $key => $value) {
+  	                $editor[$key] = (int)$value;
+  	            }
+  	            for($i = 0; $i < $numberOfSelectedEditors; $i++) {
+  	                $editorsConstraints[] = $query->contains('editors', $editor[$i]);
+  	            }
+  	            $constraints[] = $query->logicalOr(
+  	                $editorsConstraints
+                );
+  	        }
+  	    }
+  	    $selectedAuthors = explode(',', $settings['searchAuthors']);
+  	    if($selectedAuthors[0] === '' || $selectedAuthors[0] === '-1') {
+            unset($selectedAuthors);
         }
-      }
-
-      if((int)$settings['searchYearfrom'] > 0 && (int)$settings['searchYearto'] > 0) {
-        $constraints[] = $query->logicalAnd(
-          $query->logicalOr(
-            $query->logicalAnd(
-              $query->greaterThanOrEqual('bookDate', (int)$settings['searchYearfrom']),
-              $query->lessThanOrEqual('bookDate', (int)$settings['searchYearto'])
-            ),
-            $query->logicalAnd(
-              $query->greaterThanOrEqual('bookYear', (int)$settings['searchYearfrom']),
-              $query->lessThanOrEqual('bookYear', (int)$settings['searchYearto'])
-            )
-          )
-        );
-      } else if((int)$settings['searchYearfrom'] > 0 && (int)$settings['searchYearto'] == -1) {
-        $constraints[] = $query->logicalAnd(
-          $query->logicalOr(
-            $query->greaterThanOrEqual('bookDate', (int)$settings['searchYearfrom']),
-            $query->greaterThanOrEqual('bookYear', (int)$settings['searchYearfrom'])
-          )
-        );
-      } else if((int)$settings['searchYearfrom'] == -1 && (int)$settings['searchYearto'] > 0) {
-        $constraints[] = $query->logicalAnd(
-          $query->logicalOr(
-            $query->logicalAnd(
-              $query->lessThanOrEqual('bookDate', (int)$settings['searchYearto']),
-              $query->greaterThan('bookDate', 0)
-            ),
-            $query->logicalAnd(
-              $query->lessThanOrEqual('bookYear', (int)$settings['searchYearto']),
-              $query->greaterThan('bookYear', 0)
-            )
-          )
-        );
-      }
-
-      $notConstraints = $this->getNotConstraints($query, $settings);
-      if($notConstraints) {
-        $constraints[] = $notConstraints;
-      }
-
-      return $constraints;
+  	    if ( is_array( $selectedAuthors ) ) {
+  	        $numberOfSelectedAuthors = count($selectedAuthors);
+  	        if($numberOfSelectedAuthors > 0) {
+  	            foreach($selectedAuthors as $key => $value) {
+  	                $author[$key] = (int)$value;
+  	            }
+  	            for($i = 0; $i < $numberOfSelectedAuthors; $i++) {
+  	                $authorsConstraints[] = $query->contains('authors', $author[$i]);
+  	            }
+  	            $constraints[] = $query->logicalOr(
+  	                $authorsConstraints
+                );
+  	        }
+  	    }
+  	    $selectedSpecialCategories = explode(',', $settings['searchSpecialcategories']);
+  	    if($selectedSpecialCategories[0] === '' || $selectedSpecialCategories[0] === '-1') {
+            unset($selectedSpecialCategories);
+        }
+  	    if ( is_array( $selectedSpecialCategories ) ) {
+  	        $numberOfSpecialCategories = count($selectedSpecialCategories);
+  	        if($numberOfSpecialCategories > 0) {
+  	            foreach($selectedSpecialCategories as $key => $value) {
+  	                $specialCategory[$key] = (int)$value;
+  	            }
+  	            for($i = 0; $i < $numberOfSpecialCategories; $i++) {
+  	                $specialCategoriesConstraints[] = $query->contains('categories', $specialCategory[$i]);
+  	            }
+  	            $constraints[] = $query->logicalOr(
+  	                $specialCategoriesConstraints
+                );
+  	        }
+  	    }
+  	    if((int)$settings['searchYearfrom'] > 0 && (int)$settings['searchYearto'] > 0) {
+  	        $constraints[] = $query->logicalAnd(
+  	            $query->logicalOr(
+  	                $query->logicalAnd(
+  	                    $query->greaterThanOrEqual('bookDate', (int)$settings['searchYearfrom']),
+                        $query->lessThanOrEqual('bookDate', (int)$settings['searchYearto'])
+                    ),
+                    $query->logicalAnd(
+                        $query->greaterThanOrEqual('bookYear', (int)$settings['searchYearfrom']),
+                        $query->lessThanOrEqual('bookYear', (int)$settings['searchYearto'])
+                    )
+                )
+            );
+  	    } else if((int)$settings['searchYearfrom'] > 0 && (int)$settings['searchYearto'] === -1) {
+  	        $constraints[] = $query->logicalAnd(
+  	            $query->logicalOr(
+  	                $query->greaterThanOrEqual('bookDate', (int)$settings['searchYearfrom']),
+                    $query->greaterThanOrEqual('bookYear', (int)$settings['searchYearfrom'])
+                )
+            );
+  	    } else if((int)$settings['searchYearfrom'] === -1 && (int)$settings['searchYearto'] > 0) {
+  	        $constraints[] = $query->logicalAnd(
+  	            $query->logicalOr(
+  	                $query->logicalAnd(
+  	                    $query->lessThanOrEqual('bookDate', (int)$settings['searchYearto']),
+                        $query->greaterThan('bookDate', 0)
+                    ),
+                    $query->logicalAnd(
+                        $query->lessThanOrEqual('bookYear', (int)$settings['searchYearto']),
+                        $query->greaterThan('bookYear', 0)
+                    )
+                )
+            );
+  	    }
+  	    $notConstraints = $this->getNotConstraints($query, $settings);
+  	    if($notConstraints) {
+  	        $constraints[] = $notConstraints;
+  	    }
+  	    return $constraints;
     }
 
     public function getNotConstraints($query, $settings) {
@@ -3476,64 +3542,66 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
     }
 
     /**
-  	 * action importExport
-  	 * @return \string JSON
-  	 */
-  	public function importExport($uniqid) {
-      $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload');
-      file_put_contents($this->dir.'/log/import.txt', '$_FILES: '.serialize($_FILES), FILE_APPEND);
-      file_put_contents($this->dir.'/log/import.txt', '$_POST: '.serialize($_POST), FILE_APPEND);
-      $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/export/');
-      if(is_writeable($this->dir)) {
-        if ($_FILES['file'] && $_POST['import_key']) {
-          $this->fileProcessor = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Utility\\File\\ExtendedFileUtility');
+     * action importExport
+     *
+     * @param $uniqueId
+     * @return string JSON
+     */
+  	public function importExport($uniqueId): string
+    {
+        $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload');
+        file_put_contents($dir.'/log/import.txt', '$_FILES: '.serialize($_FILES), FILE_APPEND);
+        file_put_contents($dir.'/log/import.txt', '$_POST: '.serialize($_POST), FILE_APPEND);
+        $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/export/');
+        if(is_writable($dir)) {
+            if ($_FILES['file'] && $_POST['import_key']) {
+                $fileProcessor = GeneralUtility::makeInstance(ExtendedFileUtility::class);
 
-    		  $fileName = $this->fileProcessor->getUniqueName(
-    			  $_FILES['file']['name'],
-            $this->dir
-          );
+                $fileName = $fileProcessor->getUniqueName(
+                    $_FILES['file']['name'],
+                    $dir
+                );
 
-          $upload = \TYPO3\CMS\Core\Utility\GeneralUtility::upload_copy_move(
-            $_FILES['file']['tmp_name'],
-            $this->dir.$_FILES['file']['name']);
+                GeneralUtility::upload_copy_move(
+                    $_FILES['file']['tmp_name'],
+                    $dir.$_FILES['file']['name']);
 
-          $zip = new \ZipArchive;
-          if ($zip->open($fileName) === TRUE) {
-            $res = $zip->extractTo($this->dir);
-            $zip->close();
-            if($res) {
-              unlink($fileName);
-              return 1;
+                $zip = new \ZipArchive;
+                if ($zip->open($fileName) === TRUE) {
+                    $res = $zip->extractTo($dir);
+                    $zip->close();
+                    if($res) {
+                        unlink($fileName);
+                        return 1;
+                    }
+                } else {
+                    $statusCodeText = $this->getStatusCodeText(418);
+                    $this->logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqueId.'', '[Citavi Export Upload]: Upload was terminated (418).', ''.$_POST['import_key'].'');
+                    $this->getStatusCode(418);
+                }
+            } else {
+                $statusCodeText = $this->getStatusCodeText(417);
+                $this->logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqueId.'', '[Citavi Export Upload]: Upload was terminated (417).', ''.$_POST['import_key'].'');
+                $this->getStatusCode(417);
+                exit;
             }
-          } else {
-            $statusCodeText = $this->getStatusCodeText(418);
-            $this->logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqid.'', '[Citavi Export Upload]: Upload was terminated.', ''.$_POST['import_key'].'');
-            $this->getStatusCode(418);
-          }
         } else {
-          $statusCodeText = $this->getStatusCodeText(417);
-          $this->logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqid.'', '[Citavi Export Upload]: Upload was terminated.', ''.$_POST['import_key'].'');
-          $this->getStatusCode(417);
-          exit;
+            $statusCodeText = $this->getStatusCodeText(432);
+            $this->logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqueId.'', '[Citavi Export Upload]: Upload was terminated (432).', ''.$_POST['import_key'].'');
+            $this->getStatusCode(432);
+            exit;
         }
-      } else {
-        $statusCodeText = $this->getStatusCodeText(432);
-        $this->logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqid.'', '[Citavi Export Upload]: Upload was terminated.', ''.$_POST['import_key'].'');
-        $this->getStatusCode(432);
-        exit;
-      }
     }
 
     public function checkIfEntryExists($table, $field, $valueObj) {
-      $value = (array)$valueObj;
-      $res = $GLOBALS['TYPO3_DB']->exec_SELECTquery(
-  		  '*',
-  			$table,
-  			$field.' LIKE \''.$value[0].'\'',
-  			'',
-  			'',
-  			''
-  		);
+  	    $value = (array)$valueObj;
+  	    $res = $GLOBALS['TYPO3_DB']->exec_SELECTquery(
+  	        '*',
+            $table,
+            $field.' LIKE \''.$value[0].'\'',
+            '',
+            '',
+            '');
   		$data = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($res);
 
   		return $data;
@@ -3541,10 +3609,10 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
 
     /**
   	 * action importFile
-  	 * @return \string JSON
+  	 * @return string JSON
   	 */
   	public function importFile($uniqid, $logRepository, $settings) {
-      $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/files/');
+      $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/files/');
       if(is_writeable($this->dir)) {
         if ($_FILES['file'] && $_POST['import_key']) {
           if ($settings['scheduler'] == 1) {
@@ -3637,28 +3705,30 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
     }
 
     public function findAllReferenceTypOptions() {
-      $res = $GLOBALS['TYPO3_DB']->exec_SELECTquery(
-  		  'reference_type',
-  			'tx_nwcitavi_domain_model_reference',
-  			'deleted = 0 AND hidden = 0',
-  			'reference_type',
-  			'reference_type',
-  			''
-  		);
-      if ($GLOBALS['TYPO3_DB']->sql_num_rows($res)) {
-        $i = 0;
-        while($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($res)){
-          $options[$i]['id'] = $row['reference_type'];
-          $options[$i]['title'] = \TYPO3\CMS\Extbase\Utility\LocalizationUtility::translate('tx_nwcitavi_domain_model_reference.'.$row['reference_type'], 'nw_citavi_fe');
-          $i++;
-        }
-      }
-      foreach ($options as $key => $row) {
-          $option[$key] = $row['title'];
-      }
-      array_multisort($option, SORT_ASC, $options);
+  	    $option = null;
+        $options = null;
+  	    $res = $GLOBALS['TYPO3_DB']->exec_SELECTquery(
+  	        'reference_type',
+            'tx_nwcitavi_domain_model_reference',
+            'deleted = 0 AND hidden = 0',
+            'reference_type',
+            'reference_type',
+            ''
+        );
+  	    if ($GLOBALS['TYPO3_DB']->sql_num_rows($res)) {
+  	        $i = 0;
+  	        while($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($res)){
+  	            $options[$i]['id'] = $row['reference_type'];
+  	            $options[$i]['title'] = LocalizationUtility::translate('tx_nwcitavi_domain_model_reference.'.$row['reference_type'], 'nw_citavi_fe');
+  	            $i++;
+  	        }
+  	    }
+  	    foreach ($options as $key => $row) {
+  	        $option[$key] = $row['title'];
+  	    }
+  	    array_multisort($option, SORT_ASC, $options);
 
-      return $options;
+  	    return $options;
     }
 
     public function displayAdvancedSearch($settings) {
@@ -3696,8 +3766,8 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
     * @param bool $format
     * @param bool $exit
     */
-    private function debugQuery($query, $format = true, $exit = true)
+    /*private function debugQuery($query, $format = true, $exit = true)
     {
       function getFormattedSQL($sql_raw) { if (empty($sql_raw) || !is_string($sql_raw)) { return false; } $sql_reserved_all = array( 'ACCESSIBLE', 'ACTION', 'ADD', 'AFTER', 'AGAINST', 'AGGREGATE', 'ALGORITHM', 'ALL', 'ALTER', 'ANALYSE', 'ANALYZE', 'AND', 'AS', 'ASC', 'AUTOCOMMIT', 'AUTO_INCREMENT', 'AVG_ROW_LENGTH', 'BACKUP', 'BEGIN', 'BETWEEN', 'BINLOG', 'BOTH', 'BY', 'CASCADE', 'CASE', 'CHANGE', 'CHANGED', 'CHARSET', 'CHECK', 'CHECKSUM', 'COLLATE', 'COLLATION', 'COLUMN', 'COLUMNS', 'COMMENT', 'COMMIT', 'COMMITTED', 'COMPRESSED', 'CONCURRENT', 'CONSTRAINT', 'CONTAINS', 'CONVERT', 'CREATE', 'CROSS', 'CURRENT_TIMESTAMP', 'DATABASE', 'DATABASES', 'DAY', 'DAY_HOUR', 'DAY_MINUTE', 'DAY_SECOND', 'DEFINER', 'DELAYED', 'DELAY_KEY_WRITE', 'DELETE', 'DESC', 'DESCRIBE', 'DETERMINISTIC', 'DISTINCT', 'DISTINCTROW', 'DIV', 'DO', 'DROP', 'DUMPFILE', 'DUPLICATE', 'DYNAMIC', 'ELSE', 'ENCLOSED', 'END', 'ENGINE', 'ENGINES', 'ESCAPE', 'ESCAPED', 'EVENTS', 'EXECUTE', 'EXISTS', 'EXPLAIN', 'EXTENDED', 'FAST', 'FIELDS', 'FILE', 'FIRST', 'FIXED', 'FLUSH', 'FOR', 'FORCE', 'FOREIGN', 'FROM', 'FULL', 'FULLTEXT', 'FUNCTION', 'GEMINI', 'GEMINI_SPIN_RETRIES', 'GLOBAL', 'GRANT', 'GRANTS', 'GROUP', 'HAVING', 'HEAP', 'HIGH_PRIORITY', 'HOSTS', 'HOUR', 'HOUR_MINUTE', 'HOUR_SECOND', 'IDENTIFIED', 'IF', 'IGNORE', 'IN', 'INDEX', 'INDEXES', 'INFILE', 'INNER', 'INSERT', 'INSERT_ID', 'INSERT_METHOD', 'INTERVAL', 'INTO', 'INVOKER', 'IS', 'ISOLATION', 'JOIN', 'KEY', 'KEYS', 'KILL', 'LAST_INSERT_ID', 'LEADING', 'LEFT', 'LEVEL', 'LIKE', 'LIMIT', 'LINEAR', 'LINES', 'LOAD', 'LOCAL', 'LOCK', 'LOCKS', 'LOGS', 'LOW_PRIORITY', 'MARIA', 'MASTER', 'MASTER_CONNECT_RETRY', 'MASTER_HOST', 'MASTER_LOG_FILE', 'MASTER_LOG_POS', 'MASTER_PASSWORD', 'MASTER_PORT', 'MASTER_USER', 'MATCH', 'MAX_CONNECTIONS_PER_HOUR', 'MAX_QUERIES_PER_HOUR', 'MAX_ROWS', 'MAX_UPDATES_PER_HOUR', 'MAX_USER_CONNECTIONS', 'MEDIUM', 'MERGE', 'MINUTE', 'MINUTE_SECOND', 'MIN_ROWS', 'MODE', 'MODIFY', 'MONTH', 'MRG_MYISAM', 'MYISAM', 'NAMES', 'NATURAL', 'NOT', 'NULL', 'OFFSET', 'ON', 'OPEN', 'OPTIMIZE', 'OPTION', 'OPTIONALLY', 'OR', 'ORDER', 'OUTER', 'OUTFILE', 'PACK_KEYS', 'PAGE', 'PARTIAL', 'PARTITION', 'PARTITIONS', 'PASSWORD', 'PRIMARY', 'PRIVILEGES', 'PROCEDURE', 'PROCESS', 'PROCESSLIST', 'PURGE', 'QUICK', 'RAID0', 'RAID_CHUNKS', 'RAID_CHUNKSIZE', 'RAID_TYPE', 'RANGE', 'READ', 'READ_ONLY', 'READ_WRITE', 'REFERENCES', 'REGEXP', 'RELOAD', 'RENAME', 'REPAIR', 'REPEATABLE', 'REPLACE', 'REPLICATION', 'RESET', 'RESTORE', 'RESTRICT', 'RETURN', 'RETURNS', 'REVOKE', 'RIGHT', 'RLIKE', 'ROLLBACK', 'ROW', 'ROWS', 'ROW_FORMAT', 'SECOND', 'SECURITY', 'SELECT', 'SEPARATOR', 'SERIALIZABLE', 'SESSION', 'SET', 'SHARE', 'SHOW', 'SHUTDOWN', 'SLAVE', 'SONAME', 'SOUNDS', 'SQL', 'SQL_AUTO_IS_NULL', 'SQL_BIG_RESULT', 'SQL_BIG_SELECTS', 'SQL_BIG_TABLES', 'SQL_BUFFER_RESULT', 'SQL_CACHE', 'SQL_CALC_FOUND_ROWS', 'SQL_LOG_BIN', 'SQL_LOG_OFF', 'SQL_LOG_UPDATE', 'SQL_LOW_PRIORITY_UPDATES', 'SQL_MAX_JOIN_SIZE', 'SQL_NO_CACHE', 'SQL_QUOTE_SHOW_CREATE', 'SQL_SAFE_UPDATES', 'SQL_SELECT_LIMIT', 'SQL_SLAVE_SKIP_COUNTER', 'SQL_SMALL_RESULT', 'SQL_WARNINGS', 'START', 'STARTING', 'STATUS', 'STOP', 'STORAGE', 'STRAIGHT_JOIN', 'STRING', 'STRIPED', 'SUPER', 'TABLE', 'TABLES', 'TEMPORARY', 'TERMINATED', 'THEN', 'TO', 'TRAILING', 'TRANSACTIONAL', 'TRUNCATE', 'TYPE', 'TYPES', 'UNCOMMITTED', 'UNION', 'UNIQUE', 'UNLOCK', 'UPDATE', 'USAGE', 'USE', 'USING', 'VALUES', 'VARIABLES', 'VIEW', 'WHEN', 'WHERE', 'WITH', 'WORK', 'WRITE', 'XOR', 'YEAR_MONTH' ); $sql_skip_reserved_words = array('AS', 'ON', 'USING'); $sql_special_reserved_words = array('(', ')'); $sql_raw = str_replace("\n", " ", $sql_raw); $sql_formatted = ""; $prev_word = ""; $word = ""; for ($i = 0, $j = strlen($sql_raw); $i < $j; $i++) { $word .= $sql_raw[$i]; $word_trimmed = trim($word); if ($sql_raw[$i] == " " || in_array($sql_raw[$i], $sql_special_reserved_words)) { $word_trimmed = trim($word); $trimmed_special = false; if (in_array($sql_raw[$i], $sql_special_reserved_words)) { $word_trimmed = substr($word_trimmed, 0, -1); $trimmed_special = true; } $word_trimmed = strtoupper($word_trimmed); if (in_array($word_trimmed, $sql_reserved_all) && !in_array($word_trimmed, $sql_skip_reserved_words)) { if (in_array($prev_word, $sql_reserved_all)) { $sql_formatted .= '<b>' . strtoupper(trim($word)) . '</b>' . '&nbsp;'; } else { $sql_formatted .= '<br/>&nbsp;'; $sql_formatted .= '<b>' . strtoupper(trim($word)) . '</b>' . '&nbsp;'; } $prev_word = $word_trimmed; $word = ""; } else { $sql_formatted .= trim($word) . '&nbsp;'; $prev_word = $word_trimmed; $word = ""; } } } $sql_formatted .= trim($word); return $sql_formatted; } $queryParser = $this->objectManager->get(\TYPO3\CMS\Extbase\Persistence\Generic\Storage\Typo3DbQueryParser::class); $preparedStatement = $queryParser->convertQueryToDoctrineQueryBuilder($query)->getSQL(); $parameters = $queryParser->convertQueryToDoctrineQueryBuilder($query)->getParameters(); $stringParams = []; foreach ($parameters as $key => $parameter) { $stringParams[':' . $key] = $parameter; } $statement = strtr($preparedStatement, $stringParams); if ($format) { echo '<code>' . getFormattedSQL($statement) . '</code>'; } else { echo $statement; } if ($exit) { exit; }
-    }
+    }*/
 }
