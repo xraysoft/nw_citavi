@@ -542,7 +542,14 @@ class Reference extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
      * @var string
      */
     protected $sortDate = '';
-    
+
+    /**
+     * sortPerson
+     *
+     * @var string
+     */
+    protected $sortPerson = '';
+
     /**
      * txExtbaseType
      *
@@ -2245,7 +2252,28 @@ class Reference extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
     {
         $this->sortDate = $sortDate;
     }
-    
+
+    /**
+     * Returns the sortPerson
+     *
+     * @return string $sortPerson
+     */
+    public function getSortPerson()
+    {
+        return $this->sortPerson;
+    }
+
+    /**
+     * Sets the sortPerson
+     *
+     * @param string $sortPerson
+     * @return void
+     */
+    public function setSortPerson($sortPerson)
+    {
+        $this->sortPerson = $sortPerson;
+    }
+
     /**
      * Returns the txExtbaseType
      *

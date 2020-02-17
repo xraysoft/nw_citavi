@@ -3,6 +3,7 @@ namespace Netzweber\NwCitavi\Domain\Repository;
 
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Extbase\Utility\DebuggerUtility;
 
 /***************************************************************
  *
@@ -186,6 +187,7 @@ class PersonRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
               ->groupBy('tx_nwcitavi_domain_model_person.uid')
               ->orderBy('tx_nwcitavi_domain_model_person.last_name');
 
+          //DebuggerUtility::var_dump($queryBuilder);
           $statement = $queryBuilder->execute();
           $i = 0;
           while ($row = $statement->fetch()) {

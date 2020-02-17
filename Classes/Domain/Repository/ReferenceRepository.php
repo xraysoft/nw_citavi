@@ -2,6 +2,8 @@
 namespace Netzweber\NwCitavi\Domain\Repository;
 
 use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\Messaging\FlashMessage;
+use TYPO3\CMS\Core\Messaging\FlashMessageService;
 use TYPO3\CMS\Core\Resource\Exception\InsufficientFolderAccessPermissionsException;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
@@ -1304,7 +1306,6 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 $newReference->setParent($parentObj);
               }
             }
-            //\TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump($newReference);
 
             if($columnExists) {
               $repository->update($newReference);
@@ -1563,7 +1564,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                    'The categories have been created successfully',
                    'Successful',
-                   \TYPO3\CMS\Core\Messaging\FlashMessage::OK,
+                   FlashMessage::OK,
                    TRUE
                 );
               } else {
@@ -1571,12 +1572,12 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                    'No categories to create',
                    'Info',
-                   \TYPO3\CMS\Core\Messaging\FlashMessage::INFO,
+                   FlashMessage::INFO,
                    TRUE
                 );
               }
 
-              $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+              $flashMessageService = $objectManager->get(FlashMessageService::class);
               $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
               $messageQueue->addMessage($message);
             } catch (Exception $e) {
@@ -1584,11 +1585,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                  $e,
                  'Error: Categories could not be generated',
-                 \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
+                 FlashMessage::ERROR,
                  TRUE
               );
 
-              $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+              $flashMessageService = $objectManager->get(FlashMessageService::class);
               $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
               $messageQueue->addMessage($message);
             }
@@ -1597,11 +1598,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
             $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                'Task parse categories is not your turn',
                'Waiting',
-               \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
+               FlashMessage::WARNING,
                TRUE
             );
 
-            $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+            $flashMessageService = $objectManager->get(FlashMessageService::class);
             $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
             $messageQueue->addMessage($message);
           }
@@ -1611,11 +1612,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
            $e,
            'Error: Task was terminated',
-           \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
+           FlashMessage::ERROR,
            TRUE
         );
 
-        $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+        $flashMessageService = $objectManager->get(FlashMessageService::class);
         $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $messageQueue->addMessage($message);
       }
@@ -1674,7 +1675,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'The keywords have been created successfully',
                      'Successful',
-                     \TYPO3\CMS\Core\Messaging\FlashMessage::OK,
+                     FlashMessage::OK,
                      TRUE
                   );
                 } else {
@@ -1682,12 +1683,12 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'No keywords to create',
                      'Info',
-                     \TYPO3\CMS\Core\Messaging\FlashMessage::INFO,
+                     FlashMessage::INFO,
                      TRUE
                   );
                 }
 
-                $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+                $flashMessageService = $objectManager->get(FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
               } catch (Exception $e) {
@@ -1695,11 +1696,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                    $e,
                    'Error: Keywords could not be generated',
-                   \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
+                   FlashMessage::ERROR,
                    TRUE
                 );
 
-                $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+                $flashMessageService = $objectManager->get(FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
               }
@@ -1708,11 +1709,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                  'Task parse keywords is not your turn',
                  'Waiting',
-                 \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
+                 FlashMessage::WARNING,
                  TRUE
               );
 
-              $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+              $flashMessageService = $objectManager->get(FlashMessageService::class);
               $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
               $messageQueue->addMessage($message);
             }
@@ -1723,11 +1724,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
            $e,
            'Error: Task was terminated',
-           \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
+           FlashMessage::ERROR,
            TRUE
         );
 
-        $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+        $flashMessageService = $objectManager->get(FlashMessageService::class);
         $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $messageQueue->addMessage($message);
       }
@@ -1785,7 +1786,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'The libraries have been created successfully',
                      'Successful',
-                     \TYPO3\CMS\Core\Messaging\FlashMessage::OK,
+                     FlashMessage::OK,
                      TRUE
                   );
                 } else {
@@ -1793,12 +1794,12 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'No libraries to create',
                      'Info',
-                     \TYPO3\CMS\Core\Messaging\FlashMessage::INFO,
+                     FlashMessage::INFO,
                      TRUE
                   );
                 }
 
-                $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+                $flashMessageService = $objectManager->get(FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
               } catch (Exception $e) {
@@ -1806,11 +1807,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                    $e,
                    'Error: Libraries could not be generated',
-                   \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
+                   FlashMessage::ERROR,
                    TRUE
                 );
 
-                $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+                $flashMessageService = $objectManager->get(FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
               }
@@ -1819,11 +1820,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                  'Task parse libraries is not your turn',
                  'Waiting',
-                 \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
+                 FlashMessage::WARNING,
                  TRUE
               );
 
-              $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+              $flashMessageService = $objectManager->get(FlashMessageService::class);
               $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
               $messageQueue->addMessage($message);
             }
@@ -1834,11 +1835,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
            $e,
            'Error: Task was terminated',
-           \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
+           FlashMessage::ERROR,
            TRUE
         );
 
-        $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+        $flashMessageService = $objectManager->get(FlashMessageService::class);
         $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $messageQueue->addMessage($message);
       }
@@ -1896,7 +1897,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'The periodicals have been created successfully',
                      'Successful',
-                     \TYPO3\CMS\Core\Messaging\FlashMessage::OK,
+                     FlashMessage::OK,
                      TRUE
                   );
                 } else {
@@ -1904,12 +1905,12 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'No periodicals to create',
                      'Info',
-                     \TYPO3\CMS\Core\Messaging\FlashMessage::INFO,
+                     FlashMessage::INFO,
                      TRUE
                   );
                 }
 
-                $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+                $flashMessageService = $objectManager->get(FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
               } catch (Exception $e) {
@@ -1917,11 +1918,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                    $e,
                    'Error: Periodicals could not be generated',
-                   \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
+                   FlashMessage::ERROR,
                    TRUE
                 );
 
-                $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+                $flashMessageService = $objectManager->get(FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
               }
@@ -1930,11 +1931,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                  'Task parse periodicals is not your turn',
                  'Waiting',
-                 \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
+                 FlashMessage::WARNING,
                  TRUE
               );
 
-              $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+              $flashMessageService = $objectManager->get(FlashMessageService::class);
               $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
               $messageQueue->addMessage($message);
             }
@@ -1945,11 +1946,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
            $e,
            'Error: Task was terminated',
-           \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
+           FlashMessage::ERROR,
            TRUE
         );
 
-        $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+        $flashMessageService = $objectManager->get(FlashMessageService::class);
         $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $messageQueue->addMessage($message);
       }
@@ -2007,7 +2008,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'The persons have been created successfully',
                      'Successful',
-                     \TYPO3\CMS\Core\Messaging\FlashMessage::OK,
+                     FlashMessage::OK,
                      TRUE
                   );
                 } else {
@@ -2015,12 +2016,12 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'No persons to create',
                      'Info',
-                     \TYPO3\CMS\Core\Messaging\FlashMessage::INFO,
+                     FlashMessage::INFO,
                      TRUE
                   );
                 }
 
-                $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+                $flashMessageService = $objectManager->get(FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
               } catch (Exception $e) {
@@ -2028,11 +2029,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                    $e,
                    'Error: Persons could not be generated',
-                   \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
+                   FlashMessage::ERROR,
                    TRUE
                 );
 
-                $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+                $flashMessageService = $objectManager->get(FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
               }
@@ -2041,11 +2042,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                  'Task parse persons is not your turn',
                  'Waiting',
-                 \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
+                 FlashMessage::WARNING,
                  TRUE
               );
 
-              $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+              $flashMessageService = $objectManager->get(FlashMessageService::class);
               $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
               $messageQueue->addMessage($message);
             }
@@ -2056,11 +2057,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
            $e,
            'Error: Task was terminated',
-           \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
+           FlashMessage::ERROR,
            TRUE
         );
 
-        $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+        $flashMessageService = $objectManager->get(FlashMessageService::class);
         $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $messageQueue->addMessage($message);
       }
@@ -2118,7 +2119,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'The publishers have been created successfully',
                      'Successful',
-                     \TYPO3\CMS\Core\Messaging\FlashMessage::OK,
+                     FlashMessage::OK,
                      TRUE
                   );
                 } else {
@@ -2126,12 +2127,12 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'No publishers to create',
                      'Info',
-                     \TYPO3\CMS\Core\Messaging\FlashMessage::INFO,
+                     FlashMessage::INFO,
                      TRUE
                   );
                 }
 
-                $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+                $flashMessageService = $objectManager->get(FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
               } catch (Exception $e) {
@@ -2139,11 +2140,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                    $e,
                    'Error: Publishers could not be generated',
-                   \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
+                   FlashMessage::ERROR,
                    TRUE
                 );
 
-                $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+                $flashMessageService = $objectManager->get(FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
               }
@@ -2152,11 +2153,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                  'Task parse publishers is not your turn',
                  'Waiting',
-                 \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
+                 FlashMessage::WARNING,
                  TRUE
               );
 
-              $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+              $flashMessageService = $objectManager->get(FlashMessageService::class);
               $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
               $messageQueue->addMessage($message);
             }
@@ -2167,11 +2168,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
            $e,
            'Error: Task was terminated',
-           \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
+           FlashMessage::ERROR,
            TRUE
         );
 
-        $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+        $flashMessageService = $objectManager->get(FlashMessageService::class);
         $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $messageQueue->addMessage($message);
       }
@@ -2229,7 +2230,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'The seriestitles have been created successfully',
                      'Successful',
-                     \TYPO3\CMS\Core\Messaging\FlashMessage::OK,
+                     FlashMessage::OK,
                      TRUE
                   );
                 } else {
@@ -2237,12 +2238,12 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'No seriestitles to create',
                      'Info',
-                     \TYPO3\CMS\Core\Messaging\FlashMessage::INFO,
+                     FlashMessage::INFO,
                      TRUE
                   );
                 }
 
-                $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+                $flashMessageService = $objectManager->get(FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
               } catch (Exception $e) {
@@ -2250,11 +2251,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                    $e,
                    'Error: Seriestitles could not be generated',
-                   \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
+                   FlashMessage::ERROR,
                    TRUE
                 );
 
-                $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+                $flashMessageService = $objectManager->get(FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
               }
@@ -2263,11 +2264,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                  'Task parse publishers is not your turn',
                  'Waiting',
-                 \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
+                 FlashMessage::WARNING,
                  TRUE
               );
 
-              $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+              $flashMessageService = $objectManager->get(FlashMessageService::class);
               $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
               $messageQueue->addMessage($message);
             }
@@ -2278,11 +2279,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
            $e,
            'Error: Task was terminated',
-           \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
+           FlashMessage::ERROR,
            TRUE
         );
 
-        $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+        $flashMessageService = $objectManager->get(FlashMessageService::class);
         $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $messageQueue->addMessage($message);
       }
@@ -2340,7 +2341,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'The knowledgeitems have been created successfully',
                      'Successful',
-                     \TYPO3\CMS\Core\Messaging\FlashMessage::OK,
+                     FlashMessage::OK,
                      TRUE
                   );
                 } else {
@@ -2348,12 +2349,12 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'No knowledgeitems to create',
                      'Info',
-                     \TYPO3\CMS\Core\Messaging\FlashMessage::INFO,
+                     FlashMessage::INFO,
                      TRUE
                   );
                 }
 
-                $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+                $flashMessageService = $objectManager->get(FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
               } catch (Exception $e) {
@@ -2361,11 +2362,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                    $e,
                    'Error: Knowledgeitems could not be generated',
-                   \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
+                   FlashMessage::ERROR,
                    TRUE
                 );
 
-                $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+                $flashMessageService = $objectManager->get(FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
               }
@@ -2374,11 +2375,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                  'Task parse publishers is not your turn',
                  'Waiting',
-                 \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
+                 FlashMessage::WARNING,
                  TRUE
               );
 
-              $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+              $flashMessageService = $objectManager->get(FlashMessageService::class);
               $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
               $messageQueue->addMessage($message);
             }
@@ -2389,11 +2390,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
            $e,
            'Error: Task was terminated',
-           \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
+           FlashMessage::ERROR,
            TRUE
         );
 
-        $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+        $flashMessageService = $objectManager->get(FlashMessageService::class);
         $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $messageQueue->addMessage($message);
       }
@@ -2504,7 +2505,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'The references have been created successfully',
                      'Successful',
-                     \TYPO3\CMS\Core\Messaging\FlashMessage::OK,
+                     FlashMessage::OK,
                      TRUE
                   );
                 } else {
@@ -2512,12 +2513,12 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'No references to create',
                      'Info',
-                     \TYPO3\CMS\Core\Messaging\FlashMessage::INFO,
+                     FlashMessage::INFO,
                      TRUE
                   );
                 }
 
-                $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+                $flashMessageService = $objectManager->get(FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
               } catch (Exception $e) {
@@ -2525,11 +2526,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                    $e,
                    'Error: References could not be generated',
-                   \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
+                   FlashMessage::ERROR,
                    TRUE
                 );
 
-                $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+                $flashMessageService = $objectManager->get(FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
               }
@@ -2538,11 +2539,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                  'Task parse publishers is not your turn',
                  'Waiting',
-                 \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
+                 FlashMessage::WARNING,
                  TRUE
               );
 
-              $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+              $flashMessageService = $objectManager->get(FlashMessageService::class);
               $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
               $messageQueue->addMessage($message);
             }
@@ -2553,11 +2554,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
            $e,
            'Error: Task was terminated',
-           \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
+           FlashMessage::ERROR,
            TRUE
         );
 
-        $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+        $flashMessageService = $objectManager->get(FlashMessageService::class);
         $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $messageQueue->addMessage($message);
       }
@@ -2654,7 +2655,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'The locations have been created successfully',
                      'Successful',
-                     \TYPO3\CMS\Core\Messaging\FlashMessage::OK,
+                     FlashMessage::OK,
                      TRUE
                   );
                 } else {
@@ -2662,12 +2663,12 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'No locations to create',
                      'Info',
-                     \TYPO3\CMS\Core\Messaging\FlashMessage::INFO,
+                     FlashMessage::INFO,
                      TRUE
                   );
                 }
 
-                $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+                $flashMessageService = $objectManager->get(FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
               } catch (Exception $e) {
@@ -2675,11 +2676,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                    $e,
                    'Error: Locations could not be generated',
-                   \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
+                   FlashMessage::ERROR,
                    TRUE
                 );
 
-                $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+                $flashMessageService = $objectManager->get(FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
               }
@@ -2688,11 +2689,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                  'Task parse publishers is not your turn',
                  'Waiting',
-                 \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
+                 FlashMessage::WARNING,
                  TRUE
               );
 
-              $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+              $flashMessageService = $objectManager->get(FlashMessageService::class);
               $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
               $messageQueue->addMessage($message);
             }
@@ -2703,11 +2704,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
            $e,
            'Error: Task was terminated',
-           \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
+           FlashMessage::ERROR,
            TRUE
         );
 
-        $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+        $flashMessageService = $objectManager->get(FlashMessageService::class);
         $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $messageQueue->addMessage($message);
       }
@@ -2737,11 +2738,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'File "'.$fileName.'" could not be deleted',
                      'Warning',
-                     \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
+                     FlashMessage::WARNING,
                      TRUE
                   );
 
-                  $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+                  $flashMessageService = $objectManager->get(FlashMessageService::class);
                   $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                   $messageQueue->addMessage($message);
                 }
@@ -2771,11 +2772,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                   $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                      'File "'.$this->dir.'/files.txt" could not be deleted',
                      'Warning',
-                     \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
+                     FlashMessage::WARNING,
                      TRUE
                   );
 
-                  $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+                  $flashMessageService = $objectManager->get(FlashMessageService::class);
                   $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                   $messageQueue->addMessage($message);
                 }
@@ -2783,11 +2784,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
               $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                  'The files have been created successfully',
                  'Successful',
-                 \TYPO3\CMS\Core\Messaging\FlashMessage::OK,
+                 FlashMessage::OK,
                  TRUE
               );
 
-              $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+              $flashMessageService = $objectManager->get(FlashMessageService::class);
               $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
               $messageQueue->addMessage($message);
 
@@ -2801,11 +2802,11 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
            $e,
            'Error: Task was terminated',
-           \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
+           FlashMessage::ERROR,
            TRUE
         );
 
-        $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+        $flashMessageService = $objectManager->get(FlashMessageService::class);
         $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $messageQueue->addMessage($message);
       }
@@ -2833,30 +2834,16 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                    'File "'.$this->dir.'/scheduler.txt" could not be deleted',
                    'Warning',
-                   \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
+                   FlashMessage::WARNING,
                    TRUE
                 );
 
-                $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+                $flashMessageService = $objectManager->get(FlashMessageService::class);
                 $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                 $messageQueue->addMessage($message);
               }
 
-              unlink($this->dir.'/task.txt');
-
-              if(file_exists($this->dir.'/task.txt')) {
-                $this->logRepository->addLog(1, 'File "'.$this->dir.'/task.txt" could not be deleted', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task still working.', ''.$this->key.'', $settings['sPid']);
-                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                   'File "'.$this->dir.'/task.txt" could not be deleted',
-                   'Warning',
-                   \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
-                   TRUE
-                );
-
-                $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
-                $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-                $messageQueue->addMessage($message);
-              }
+              file_put_contents($this->dir.'/task.txt', 12);
             }
           }
         }
@@ -2865,14 +2852,91 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
            $e,
            'Error: Task was terminated',
-           \TYPO3\CMS\Core\Messaging\FlashMessage::ERROR,
+           FlashMessage::ERROR,
            TRUE
         );
 
-        $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
+        $flashMessageService = $objectManager->get(FlashMessageService::class);
         $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
         $messageQueue->addMessage($message);
       }
+    }
+
+    public function taskParseXMLSorting($numEntries) {
+        $uniqueId = uniqid('', true);
+        $objectManager = null;
+        try {
+            $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
+            $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+            $this->initTSFE($this->getRootpage($objectManager));
+            $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
+            $taskExists = file_exists($dir . '/task.txt');
+            if ($taskExists) {
+                $taskString = file_get_contents($dir . '/task.txt');
+                $taskCols = explode('|', $taskString);
+                if ((int)$taskCols[0] === 12) {
+                    $query = $this->createQuery();
+                    $res = $query->execute();
+                    foreach($res as $obj) {
+                        $reference = $obj;
+                        $authors = $reference->getAuthors();
+                        $i = 0;
+                        foreach ($authors as $author) {
+                            if($i === 0) {
+                                $reference->setSortPerson($author->getLastName());
+                            }
+                            $i++;
+                        }
+                        if(count($authors) === 0) {
+                            $editors = $reference->getEditors();
+                            $i = 0;
+                            foreach ($editors as $editor) {
+                                if($i === 0) {
+                                    $reference->setSortPerson($editor->getLastName());
+                                }
+                                $i++;
+                            }
+                            if(count($editors) === 0) {
+                                $organizations = $reference->getOrganizations();
+                                $i = 0;
+                                foreach ($organizations as $organization) {
+                                    if($i === 0) {
+                                        $reference->setSortPerson($organization->getLastName());
+                                    }
+                                    $i++;
+                                }
+                            }
+                        }
+                        $this->update($reference);
+                        $persistenceManager = $this->objectManager->get("TYPO3\\CMS\\Extbase\\Persistence\\Generic\\PersistenceManager");
+                        $persistenceManager->persistAll();
+                    }
+
+                    unlink($this->dir.'/task.txt');
+
+                    if(file_exists($this->dir.'/task.txt')) {
+                        $this->logRepository->addLog(1, 'File "'.$this->dir.'/task.txt" could not be deleted', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task still working.', ''.$this->key.'', $settings['sPid']);
+                        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
+                            'File "'.$this->dir.'/task.txt" could not be deleted',
+                            'Warning',
+                            FlashMessage::WARNING,
+                            TRUE
+                        );
+
+                        $flashMessageService = $objectManager->get(FlashMessageService::class);
+                        $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
+                        $messageQueue->addMessage($message);
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'');
+            $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage', $e, 'Error: Task was terminated', FlashMessage::ERROR, TRUE);
+
+            $flashMessageService = $objectManager->get(FlashMessageService::class);
+            $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
+            $messageQueue->addMessage($message);
+        }
     }
 
     public function setFileReferences($referenceId, $file, $fileType, $settings) {
@@ -2923,7 +2987,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
             $query->setOrderings(
                 [
                     'sortDate' => QueryInterface::ORDER_DESCENDING,
-                    'title' => QueryInterface::ORDER_ASCENDING
+                    'sortPerson' => QueryInterface::ORDER_ASCENDING
                 ]
             );
         } else if ($settings['showreferencetype'] === '1') {
@@ -2931,7 +2995,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                 [
                     'referenceType' => QueryInterface::ORDER_ASCENDING,
                     'sortDate' => QueryInterface::ORDER_DESCENDING,
-                    'title' => QueryInterface::ORDER_ASCENDING
+                    'sortPerson' => QueryInterface::ORDER_ASCENDING
                 ]
             );
         }
@@ -3283,9 +3347,16 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
   	            for($i = 0; $i < $numberOfSelectedCategory; $i++) {
   	                $categoryConstraints[] = $query->contains('categories', $category[$i]);
   	            }
-  	            $constraints[] = $query->logicalOr(
-  	                $categoryConstraints
-                );
+  	            if($settings['selectedcategoryoperand'] === '0') {
+                    $constraints[] = $query->logicalOr(
+                        $categoryConstraints
+                    );
+                }
+  	            else {
+                    $constraints[] = $query->logicalAnd(
+                        $categoryConstraints
+                    );
+                }
   	        }
   	    }
   	    $selectedCategories = explode(',', $settings['searchCategories']);

@@ -81,6 +81,7 @@ CREATE TABLE tx_nwcitavi_domain_model_reference (
 	page_range_end varchar(255) DEFAULT '' NOT NULL,
 	doi varchar(255) DEFAULT '' NOT NULL,
 	sort_date varchar(255) DEFAULT '' NOT NULL,
+	sort_person varchar(255) DEFAULT '' NOT NULL,
 	literaturlist_id varchar(255) DEFAULT '' NOT NULL,
 	attachment int(11) unsigned NOT NULL default '0',
 	cover int(11) unsigned NOT NULL default '0',

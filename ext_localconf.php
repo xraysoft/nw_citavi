@@ -35,7 +35,7 @@ call_user_func(
         			}
         	   }'
         );
-        
+
         $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['scheduler']['tasks'][\Netzweber\NwCitavi\Task\ParseCategoriesTask::class] = [
             'extension' => $extKey,
             'title' => 'LLL:EXT:nw_citavi/Resources/Private/Language/locallang.xlf:task.parseCategories.name',
@@ -96,6 +96,12 @@ call_user_func(
             'description' => 'LLL:EXT:nw_citavi/Resources/Private/Language/locallang.xlf:task.parseLocations.description',
             'additionalFields' => '',
         ];
+        $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['scheduler']['tasks'][\Netzweber\NwCitavi\Task\ParseSorting::class] = [
+            'extension'        => $extKey,
+            'title' => 'LLL:EXT:nw_citavi/Resources/Private/Language/locallang.xlf:task.parseSorting.name',
+            'description' => 'LLL:EXT:nw_citavi/Resources/Private/Language/locallang.xlf:task.parseSorting.description',
+            'additionalFields' => '',
+        ];
         $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['scheduler']['tasks'][\Netzweber\NwCitavi\Task\ParseFiles::class] = [
             'extension'        => $extKey,
             'title' => 'LLL:EXT:nw_citavi/Resources/Private/Language/locallang.xlf:task.parseFiles.name',
@@ -109,13 +115,13 @@ call_user_func(
             'additionalFields' => '',
         ];
     		$iconRegistry = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance(\TYPO3\CMS\Core\Imaging\IconRegistry::class);
-    		
+
   			$iconRegistry->registerIcon(
   				'nw_citavi-plugin-citaviimporter',
   				\TYPO3\CMS\Core\Imaging\IconProvider\SvgIconProvider::class,
   				['source' => 'EXT:nw_citavi/Resources/Public/Icons/user_plugin_citaviimporter.svg']
   			);
-		
+
     },
     $_EXTKEY
 );
