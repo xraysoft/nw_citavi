@@ -2,18 +2,18 @@
 namespace Netzweber\NwCitavi\Task;
 
 class ParsePublishers extends \TYPO3\CMS\Scheduler\Task\AbstractTask {
-  
+
   public function execute() {
     if(is_null($referenceRepository)) {
       $objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\CMS\Extbase\Object\ObjectManager');
-      $referenceRepository = $objectManager->get('Netzweber\NwCitavi\Domain\Repository\ReferenceRepository');      
+      $referenceRepository = $objectManager->get('Netzweber\NwCitavi\Domain\Repository\ReferenceRepository');
     }
     $res = false;
-    
+
     $this->dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload');
     if(file_exists($this->dir.'/scheduler.txt')) {
-      $referenceRepository->taskParseXMLPublishers(0);
-      
+      $referenceRepository->taskParseXMLPublishers();
+
       $res = true;
     } else {
       $message = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
@@ -22,14 +22,14 @@ class ParsePublishers extends \TYPO3\CMS\Scheduler\Task\AbstractTask {
          \TYPO3\CMS\Core\Messaging\FlashMessage::WARNING,
          TRUE
       );
-      
+
       $flashMessageService = $objectManager->get(\TYPO3\CMS\Core\Messaging\FlashMessageService::class);
       $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
       $messageQueue->addMessage($message);
-      
+
       $res = true;
-    }   
-    
+    }
+
     return $res;
   }
 }

@@ -12,7 +12,7 @@ class ParseSorting extends \TYPO3\CMS\Scheduler\Task\AbstractTask {
 
         $dir = \TYPO3\CMS\Core\Utility\GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload');
         if(file_exists($dir.'/scheduler.txt')) {
-            $referenceRepository->taskParseXMLSorting(0);
+            $referenceRepository->taskParseXMLSorting();
 
             $res = true;
         } else {

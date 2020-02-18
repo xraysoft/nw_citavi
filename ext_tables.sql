@@ -126,7 +126,7 @@ CREATE TABLE tx_nwcitavi_domain_model_log (
 	errortext varchar(255) DEFAULT '' NOT NULL,
 	func varchar(255) DEFAULT '' NOT NULL,
 	logtype varchar(255) DEFAULT '' NOT NULL,
-	details varchar(255) DEFAULT '' NOT NULL,
+	details text NOT NULL,
 	importkey varchar(255) DEFAULT '' NOT NULL,
 
 	tstamp int(11) unsigned DEFAULT '0' NOT NULL,

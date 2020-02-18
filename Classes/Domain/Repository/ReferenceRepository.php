@@ -11,6 +11,7 @@ use TYPO3\CMS\Extbase\Persistence\QueryInterface;
 use TYPO3\CMS\Extbase\Utility\LocalizationUtility;
 use TYPO3\CMS\Core\Utility\File\ExtendedFileUtility;
 use ZipArchive;
+use TYPO3\CMS\Extbase\Object\ObjectManager;
 
 /***
  *
@@ -52,112 +53,6 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $querySettings = $this->objectManager->get('TYPO3\\CMS\\Extbase\\Persistence\\Generic\\Typo3QuerySettings');
         $querySettings->setRespectStoragePage(FALSE);
         $this->setDefaultQuerySettings($querySettings);
-    }
-
-    /**
-     * action importXML
-     *
-     * @param $uniqueId
-     * @param $logRepository
-     * @return string JSON
-     * @throws InsufficientFolderAccessPermissionsException
-     */
-  	public function importXML($uniqueId, $logRepository): ?string
-    {
-        $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload');
-        file_put_contents($dir.'/log/upload.txt', 'importXML|start'.chr(10), FILE_APPEND);
-        $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
-        if(is_writable($dir)) {
-            file_put_contents($dir.'/log/upload.txt', 'dir|'.$dir.chr(13).chr(10), FILE_APPEND);
-            if ($_POST['import_key']) {
-            	file_put_contents($dir.'/log/upload.txt', 'import_key|'.$_POST['import_key'].chr(13).chr(10), FILE_APPEND);
-            	if($_FILES['file']) {
-            		file_put_contents($dir.'/log/upload.txt', 'file name|'.$_FILES['file']['name'].chr(13).chr(10), FILE_APPEND);
-            		$fileProcessor = GeneralUtility::makeInstance(ExtendedFileUtility::class);
-
-            		$fileName = $fileProcessor->getUniqueName(
-            				$_FILES['file']['name'],
-                            $dir
-                    );
-
-            		GeneralUtility::upload_copy_move(
-            		    $_FILES['file']['tmp_name'],
-                        $fileName
-                    );
-
-            		$zip = new ZipArchive;
-            		if ($zip->open($fileName) === TRUE) {
-            		    $res = $zip->extractTo($dir);
-            		    $zip->close();
-            		    if($res) {
-            		        unlink($fileName);
-            		    }
-            		} else {
-            		    $statusCodeText = $this->getStatusCodeText(418);
-            		    $logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqueId.'', '[Citavi XML Upload]: Upload was terminated.', ''.$_POST['import_key'].'', $settings['sPid']);
-            		    $this->getStatusCode(418);
-            		    file_put_contents($dir.'/log/upload.txt', 'error|418'.chr(13).chr(10), FILE_APPEND);
-            		}
-
-            		$resourceFactory = ResourceFactory::getInstance();
-            		$defaultStorage = $resourceFactory->getDefaultStorage();
-            		$folder = $defaultStorage->getFolder('/user_upload/citavi_upload/');
-            		$files = $defaultStorage->getFilesInFolder($folder);
-            		if(is_array($files)) {
-            		    foreach($files as $file) {
-            		        $thisFile = $file->getProperties();
-            		        if($thisFile['extension'] === 'xml') {
-            		            $folder2 = $defaultStorage->getFolder('/user_upload/citavi_upload/backup/');
-            		            $files2 = $defaultStorage->getFilesInFolder($folder2);
-            		            $uploadDir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
-            		            $backupDir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/backup/');
-            		            if(is_array($files2)) {
-            		                $numFiles = count($files2);
-            		                if($numFiles < 10) {
-            		                    GeneralUtility::upload_copy_move(
-            		                        $uploadDir.$thisFile['name'],
-                                            $backupDir.time().'_'.$thisFile['name']
-                                        );
-            		                    return true;
-            		                }
-                                    $i = 0;
-                                    foreach($files2 as $file2) {
-                                        if($i === 0) {
-                                            $thisFile2 = $file2->getProperties();
-                                            unlink($backupDir.$thisFile2['name']);
-                                        }
-                                        $i++;
-                                    }
-                                    GeneralUtility::upload_copy_move(
-                                        $uploadDir.$thisFile['name'],
-                                        $backupDir.time().'_'.$thisFile['name']
-                                    );
-                                    return true;
-                                }
-            		        }
-            		    }
-            		}
-            	} else {
-            	    $statusCodeText = $this->getStatusCodeText(419);
-            	    $logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqueId.'', '[Citavi XML Upload]: Upload was terminated.', ''.$_POST['import_key'].'', $settings['sPid']);
-            	    $this->getStatusCode(419);
-            	    file_put_contents($dir.'/log/upload.txt', 'error|419'.chr(13).chr(10), FILE_APPEND);
-            	}
-            } else {
-                $statusCodeText = $this->getStatusCodeText(417);
-                $logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqueId.'', '[Citavi XML Upload]: Upload was terminated.', ''.$_POST['import_key'].'', $settings['sPid']);
-                $this->getStatusCode(417);
-                file_put_contents($dir.'/log/upload.txt', 'error|417'.chr(13).chr(10), FILE_APPEND);
-                exit;
-            }
-        } else {
-            $statusCodeText = $this->getStatusCodeText(432);
-            $logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqueId.'', '[Citavi XML Upload]: Upload was terminated.', ''.$_POST['import_key'].'', $settings['sPid']);
-            $this->getStatusCode(432);
-            file_put_contents($dir.'/log/upload.txt', 'error|432'.chr(13).chr(10), FILE_APPEND);
-            exit;
-        }
-        return true;
     }
 
     public function parseXML($step, $startTime, $uniqid) {
@@ -1531,7 +1426,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       unset($category);
     }
 
-    public function taskParseXMLCategories($numEntries) {
+    public function taskParseXMLCategories() {
       try {
         $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload');
@@ -1622,7 +1517,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       }
     }
 
-    public function taskParseXMLKeywords($numEntries) {
+    public function taskParseXMLKeywords() {
       try {
         $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
@@ -1734,7 +1629,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       }
     }
 
-    public function taskParseXMLLibraries($numEntries) {
+    public function taskParseXMLLibraries() {
       try {
         $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
@@ -1845,7 +1740,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       }
     }
 
-    public function taskParseXMLPeriodicals($numEntries) {
+    public function taskParseXMLPeriodicals() {
       try {
         $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
@@ -1956,7 +1851,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       }
     }
 
-    public function taskParseXMLPersons($numEntries) {
+    public function taskParseXMLPersons() {
       try {
         $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
@@ -2067,7 +1962,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       }
     }
 
-    public function taskParseXMLPublishers($numEntries) {
+    public function taskParseXMLPublishers() {
       try {
         $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
@@ -2178,7 +2073,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       }
     }
 
-    public function taskParseXMLSeriestitles($numEntries) {
+    public function taskParseXMLSeriestitles() {
       try {
         $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
@@ -2289,7 +2184,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       }
     }
 
-    public function taskParseXMLKnowledgeitems($numEntries) {
+    public function taskParseXMLKnowledgeitems() {
       try {
         $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
@@ -2400,7 +2295,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       }
     }
 
-    public function taskParseXMLReferences($numEntries) {
+    public function taskParseXMLReferences() {
       try {
         $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
@@ -2564,7 +2459,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       }
     }
 
-    public function taskParseXMLLocations($numEntries) {
+    public function taskParseXMLLocations() {
       try {
         $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
@@ -2714,7 +2609,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       }
     }
 
-    public function taskParseXMLFiles($numEntries) {
+    public function taskParseXMLFiles() {
       try {
         $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
         $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
@@ -2812,62 +2707,45 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       }
     }
 
-    public function taskParseXMLCleaner($numEntries) {
-      try {
-        $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-        $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
-        $this->initTSFE($this->getRootpage($objectManager));
-        $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
-        $check = file_exists($this->dir.'/scheduler.txt');
-        if($check) {
-          $taskExists = file_exists($this->dir.'/task.txt');
-          if($taskExists) {
-            $taskString = file_get_contents ( $this->dir.'/task.txt' );
-            $taskCols = explode("|", $taskString);
-            if((int)$taskCols[0] == 11) {
-              $this->compareHashData($settings);
+    public function taskParseXMLCleaner(): void
+    {
+        $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
+        $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+        $schedulerCols = explode('|', $dir.'/scheduler.txt');
+        try {
+            $this->initTSFE($this->getRootpage($objectManager));
+            $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
+            $check = file_exists($dir.'/scheduler.txt');
+            if($check) {
+            	$taskExists = file_exists($dir.'/task.txt');
+            	if($taskExists) {
+            	    $taskString = file_get_contents ( $dir.'/task.txt' );
+            	    $taskCols = explode('|', $taskString);
+            	    if((int)$taskCols[0] === 11) {
+            	        //$this->compareHashData($settings);
+            	        $this->compareExportFiles($settings);
 
-              unlink($this->dir.'/scheduler.txt');
-
-              if(file_exists($this->dir.'/scheduler.txt')) {
-                $this->logRepository->addLog(1, 'File "'.$this->dir.'/scheduler.txt" could not be deleted', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task still working.', ''.$this->key.'', $settings['sPid']);
-                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                   'File "'.$this->dir.'/scheduler.txt" could not be deleted',
-                   'Warning',
-                   FlashMessage::WARNING,
-                   TRUE
-                );
-
-                $flashMessageService = $objectManager->get(FlashMessageService::class);
-                $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-                $messageQueue->addMessage($message);
-              }
-
-              file_put_contents($this->dir.'/task.txt', 12);
+            	        //file_put_contents($dir.'/task.txt', 12);
+            	    }
+            	}
             }
-          }
-        }
-      } catch (Exception $e) {
-        $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-           $e,
-           'Error: Task was terminated',
-           FlashMessage::ERROR,
-           TRUE
-        );
+        } catch (Exception $e) {
+            $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$schedulerCols[2].'', '[Citavi Parser]: Task was terminated.', ''.$schedulerCols[1].'');
+            $message = GeneralUtility::makeInstance(FlashMessage::class, $e, 'Error: Task was terminated', FlashMessage::ERROR, TRUE);
 
-        $flashMessageService = $objectManager->get(FlashMessageService::class);
-        $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-        $messageQueue->addMessage($message);
-      }
+            $flashMessageService = $objectManager->get(FlashMessageService::class);
+            $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
+            $messageQueue->addMessage($message);
+        }
     }
 
-    public function taskParseXMLSorting($numEntries) {
-        $uniqueId = uniqid('', true);
+    public function taskParseXMLSorting(): void
+    {
+        $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+        $schedulerCols = explode('|', $dir.'/scheduler.txt');
         $objectManager = null;
         try {
             $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-            $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
             $this->initTSFE($this->getRootpage($objectManager));
             $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
             $taskExists = file_exists($dir . '/task.txt');
@@ -2912,10 +2790,10 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                         $persistenceManager->persistAll();
                     }
 
-                    unlink($this->dir.'/task.txt');
+                    unlink($dir.'/task.txt');
 
-                    if(file_exists($this->dir.'/task.txt')) {
-                        $this->logRepository->addLog(1, 'File "'.$this->dir.'/task.txt" could not be deleted', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task still working.', ''.$this->key.'', $settings['sPid']);
+                    if(file_exists($dir.'/task.txt')) {
+                        $this->logRepository->addLog(1, 'File "'.$dir.'/task.txt" could not be deleted', 'Parser', ''.$schedulerCols[2].'', '[Citavi Parser]: Task still working.', ''.$schedulerCols[1].'');
                         $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
                             'File "'.$this->dir.'/task.txt" could not be deleted',
                             'Warning',
@@ -2927,10 +2805,21 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                         $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
                         $messageQueue->addMessage($message);
                     }
+
+                    unlink($dir.'/scheduler.txt');
+
+                    if(file_exists($dir.'/scheduler.txt')) {
+                        $this->logRepository->addLog(1, 'File "'.$dir.'/scheduler.txt" could not be deleted', 'Parser', ''.$schedulerCols[2].'', '[Citavi Parser]: Task still working.', ''.$schedulerCols[1].'');
+                        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage', 'File "'.$dir.'/scheduler.txt" could not be deleted', 'Warning', FlashMessage::WARNING, TRUE);
+
+                        $flashMessageService = $objectManager->get(FlashMessageService::class);
+                        $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
+                        $messageQueue->addMessage($message);
+                    }
                 }
             }
         } catch (Exception $e) {
-            $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'');
+            $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$schedulerCols[2].'', '[Citavi Parser]: Task was terminated.', ''.$schedulerCols[1].'');
             $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage', $e, 'Error: Task was terminated', FlashMessage::ERROR, TRUE);
 
             $flashMessageService = $objectManager->get(FlashMessageService::class);
@@ -3613,17 +3502,123 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
     }
 
     /**
+     * action importXML
+     *
+     * @param $uniqueId
+     * @param $logRepository
+     * @return string JSON
+     * @throws InsufficientFolderAccessPermissionsException
+     */
+    public function importXML($uniqueId, $logRepository): ?string
+    {
+        $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload');
+        file_put_contents($dir.'/log/upload.txt', 'importXML|start'.chr(10), FILE_APPEND);
+        $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
+        if(is_writable($dir)) {
+            file_put_contents($dir.'/log/upload.txt', 'dir|'.$dir.chr(13).chr(10), FILE_APPEND);
+            if ($_POST['import_key']) {
+                file_put_contents($dir.'/log/upload.txt', 'import_key|'.$_POST['import_key'].chr(13).chr(10), FILE_APPEND);
+                if($_FILES['file']) {
+                    file_put_contents($dir.'/log/upload.txt', 'file name|'.$_FILES['file']['name'].chr(13).chr(10), FILE_APPEND);
+                    $fileProcessor = GeneralUtility::makeInstance(ExtendedFileUtility::class);
+
+                    $fileName = $fileProcessor->getUniqueName(
+                        $_FILES['file']['name'],
+                        $dir
+                    );
+
+                    GeneralUtility::upload_copy_move(
+                        $_FILES['file']['tmp_name'],
+                        $fileName
+                    );
+
+                    $zip = new ZipArchive;
+                    if ($zip->open($fileName) === TRUE) {
+                        $res = $zip->extractTo($dir);
+                        $zip->close();
+                        if($res) {
+                            unlink($fileName);
+                        }
+                    } else {
+                        $statusCodeText = $this->getStatusCodeText(418);
+                        $logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqueId.'', '[Citavi XML Upload]: Upload was terminated.', ''.$_POST['import_key'].'', $settings['sPid']);
+                        $this->getStatusCode(418);
+                        file_put_contents($dir.'/log/upload.txt', 'error|418'.chr(13).chr(10), FILE_APPEND);
+                    }
+
+                    $resourceFactory = ResourceFactory::getInstance();
+                    $defaultStorage = $resourceFactory->getDefaultStorage();
+                    $folder = $defaultStorage->getFolder('/user_upload/citavi_upload/');
+                    $files = $defaultStorage->getFilesInFolder($folder);
+                    if(is_array($files)) {
+                        foreach($files as $file) {
+                            $thisFile = $file->getProperties();
+                            if($thisFile['extension'] === 'xml') {
+                                $folder2 = $defaultStorage->getFolder('/user_upload/citavi_upload/backup/');
+                                $files2 = $defaultStorage->getFilesInFolder($folder2);
+                                $uploadDir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+                                $backupDir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/backup/');
+                                if(is_array($files2)) {
+                                    $numFiles = count($files2);
+                                    if($numFiles < 10) {
+                                        GeneralUtility::upload_copy_move(
+                                            $uploadDir.$thisFile['name'],
+                                            $backupDir.time().'_'.$thisFile['name']
+                                        );
+                                        return true;
+                                    }
+                                    $i = 0;
+                                    foreach($files2 as $file2) {
+                                        if($i === 0) {
+                                            $thisFile2 = $file2->getProperties();
+                                            unlink($backupDir.$thisFile2['name']);
+                                        }
+                                        $i++;
+                                    }
+                                    GeneralUtility::upload_copy_move(
+                                        $uploadDir.$thisFile['name'],
+                                        $backupDir.time().'_'.$thisFile['name']
+                                    );
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    $statusCodeText = $this->getStatusCodeText(419);
+                    $logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqueId.'', '[Citavi XML Upload]: Upload was terminated.', ''.$_POST['import_key'].'', $settings['sPid']);
+                    $this->getStatusCode(419);
+                    file_put_contents($dir.'/log/upload.txt', 'error|419'.chr(13).chr(10), FILE_APPEND);
+                }
+            } else {
+                $statusCodeText = $this->getStatusCodeText(417);
+                $logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqueId.'', '[Citavi XML Upload]: Upload was terminated.', ''.$_POST['import_key'].'', $settings['sPid']);
+                $this->getStatusCode(417);
+                file_put_contents($dir.'/log/upload.txt', 'error|417'.chr(13).chr(10), FILE_APPEND);
+                exit;
+            }
+        } else {
+            $statusCodeText = $this->getStatusCodeText(432);
+            $logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqueId.'', '[Citavi XML Upload]: Upload was terminated.', ''.$_POST['import_key'].'', $settings['sPid']);
+            $this->getStatusCode(432);
+            file_put_contents($dir.'/log/upload.txt', 'error|432'.chr(13).chr(10), FILE_APPEND);
+            exit;
+        }
+        return true;
+    }
+
+    /**
      * action importExport
      *
      * @param $uniqueId
-     * @return string JSON
+     * @return bool JSON
      */
-  	public function importExport($uniqueId): string
+  	public function importExport($uniqueId): bool
     {
         $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload');
         file_put_contents($dir.'/log/import.txt', '$_FILES: '.serialize($_FILES), FILE_APPEND);
         file_put_contents($dir.'/log/import.txt', '$_POST: '.serialize($_POST), FILE_APPEND);
-        $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/export/');
+        $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/temp/');
         if(is_writable($dir)) {
             if ($_FILES['file'] && $_POST['import_key']) {
                 $fileProcessor = GeneralUtility::makeInstance(ExtendedFileUtility::class);
@@ -3633,21 +3628,21 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                     $dir
                 );
 
-                GeneralUtility::upload_copy_move(
+                $upload_copy_move = GeneralUtility::upload_copy_move(
                     $_FILES['file']['tmp_name'],
-                    $dir.$_FILES['file']['name']);
+                    $fileName
+                );
 
-                $zip = new \ZipArchive;
+                $zip = new ZipArchive;
                 if ($zip->open($fileName) === TRUE) {
                     $res = $zip->extractTo($dir);
                     $zip->close();
                     if($res) {
                         unlink($fileName);
-                        return 1;
                     }
                 } else {
                     $statusCodeText = $this->getStatusCodeText(418);
-                    $this->logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqueId.'', '[Citavi Export Upload]: Upload was terminated (418).', ''.$_POST['import_key'].'');
+                    $this->logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqueId.'', '[Citavi Export Upload]: Upload was terminated (418). ['.$upload_copy_move.'] '.$fileName.' could not be open. '.serialize($_FILES).'', ''.$_POST['import_key'].'');
                     $this->getStatusCode(418);
                 }
             } else {
@@ -3662,6 +3657,7 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
             $this->getStatusCode(432);
             exit;
         }
+        return true;
     }
 
     public function checkIfEntryExists($table, $field, $valueObj) {
@@ -3828,6 +3824,38 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
       $pageRepository->init(FALSE);
       $defaultPageIds = \array_keys($pageRepository->getMenu(0, 'uid'));
       return $defaultPageIds[0];
+    }
+
+    public function compareExportFiles($settings): void
+    {
+        $exportDir = GeneralUtility::getFileAbsFileName($settings['export.']['path']);
+        $tempDir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/temp/');
+        $filesInExportDir = scandir($exportDir);
+        $filesInExportDir = count($filesInExportDir)-2;
+        $filesInTempDir = scandir($tempDir);
+        $filesInTempDir = count($filesInTempDir)-2;
+        if(($filesInExportDir > 0) && is_dir($exportDir)) {
+            array_map(function($value) {
+                $this->delete($value);
+                rmdir($value);
+            },glob($exportDir . '*', GLOB_ONLYDIR));
+            array_map('unlink', glob($exportDir. '*'));
+        }
+        if(($filesInTempDir > 0) && is_dir($exportDir) && is_dir($tempDir)) {
+            $src = 'temp';
+            $dst = 'export';
+            $files = glob($tempDir . '*');
+            foreach($files as $file){
+                $file_to_go = str_replace($src,$dst,$file);
+                copy($file, $file_to_go);
+            }
+            array_map(function($value) {
+                $this->delete($value);
+                rmdir($value);
+            },glob($tempDir . '*', GLOB_ONLYDIR));
+            array_map('unlink', glob($tempDir. '*'));
+            //\TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump($tempFiles);
+        }
     }
 
     /**
