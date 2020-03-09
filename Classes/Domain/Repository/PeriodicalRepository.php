@@ -3,12 +3,13 @@ namespace Netzweber\NwCitavi\Domain\Repository;
 
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Extbase\Persistence\QueryResultInterface;
 
 /***************************************************************
  *
  *  Copyright notice
  *
- *  (c) 2014 Lutz Eckelmann <lutz.eckelmann@xraysoft.de>, Netzweber
+ *  (c) 2014 Lutz Eckelmann <lutz@eckelmann.biz>, Netzweber
  *
  *  All rights reserved
  *
@@ -33,163 +34,186 @@ use TYPO3\CMS\Core\Database\ConnectionPool;
  * The repository for Periodicals
  */
 class PeriodicalRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
-  public function initializeObject() {
-      /** @var $querySettings \TYPO3\CMS\Extbase\Persistence\Generic\Typo3QuerySettings */
-      $querySettings = $this->objectManager->get('TYPO3\\CMS\\Extbase\\Persistence\\Generic\\Typo3QuerySettings');
-      
-      $querySettings->setRespectStoragePage(FALSE);
-      
-      $this->setDefaultQuerySettings($querySettings);
-  }
+    public function initializeObject() {
+        /** @var $querySettings \TYPO3\CMS\Extbase\Persistence\Generic\Typo3QuerySettings */
+        $querySettings = $this->objectManager->get('TYPO3\\CMS\\Extbase\\Persistence\\Generic\\Typo3QuerySettings');
+        $querySettings->setRespectStoragePage(FALSE);
+        $this->setDefaultQuerySettings($querySettings);
+    }
 
-  public function findAllOptions() {
-    if(!empty($settings['selectedcategory'])) {
-      $filterCategories = explode(",", $settings['selectedcategory']);
+    /**
+     * Find all periocials for the searchform
+     *
+     * @param $settings
+     * @return array
+     */
+    public function findAllOptions($settings): array
+    {
+        $filterCategories = null;
+        $filterAuthors = null;
+        $filterPublishers = null;
+        $filterKeywords = null;
+        $filterReferenceTypes = null;
+        $orXCategory = null;
+        $orXAuthor = null;
+        $orXPublisher = null;
+        $orXKeyword = null;
+        $orXReference = null;
+        $res = array();
+        if(!empty($settings['selectedcategory'])) {
+            $filterCategories = explode(',', $settings['selectedcategory']);
+        }
+        if(!empty($settings['selectedauthor'])) {
+            $filterAuthors = explode(',', $settings['selectedauthor']);
+        }
+        if(!empty($settings['selectedperiodical'])) {
+            $filterPublishers = explode(',', $settings['selectedperiodical']);
+        }
+        if(!empty($settings['selectedkeyword'])) {
+            $filterKeywords = explode(',', $settings['selectedkeyword']);
+        }
+        if(!empty($settings['selectedreferencetype'])) {
+            $filterReferenceTypes = explode(',', $settings['selectedreferencetype']);
+        }
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable('tx_nwcitavi_domain_model_periodical')->createQueryBuilder();
+        if(is_array($filterCategories)) {
+            $orXCategory = $queryBuilder->expr()->orX();
+            foreach($filterCategories as $filterCategory) {
+                $orXCategory->add($queryBuilder->expr()->eq('mmcategory.uid_foreign', $queryBuilder->createNamedParameter($filterCategory, \PDO::PARAM_INT)));
+            }
+        }
+        if(is_array($filterAuthors)) {
+            $orXAuthor = $queryBuilder->expr()->orX();
+            foreach($filterAuthors as $filterAuthor) {
+                $orXAuthor->add($queryBuilder->expr()->eq('mmauthor.uid_foreign', $queryBuilder->createNamedParameter($filterAuthor, \PDO::PARAM_INT)));
+            }
+        }
+        if(is_array($filterPublishers)) {
+            $orXPublisher = $queryBuilder->expr()->orX();
+            foreach($filterPublishers as $filterPublisher) {
+                $orXPublisher->add($queryBuilder->expr()->eq('mmpublisher.uid_foreign', $queryBuilder->createNamedParameter($filterPublisher, \PDO::PARAM_INT)));
+            }
+        }
+        if(is_array($filterKeywords)) {
+            $orXKeyword = $queryBuilder->expr()->orX();
+            foreach($filterKeywords as $filterKeyword) {
+                $orXKeyword->add($queryBuilder->expr()->eq('mmkeyword.uid_foreign', $queryBuilder->createNamedParameter($filterKeyword, \PDO::PARAM_INT)));
+            }
+        }
+        if(is_array($filterReferenceTypes)) {
+            $orXReference = $queryBuilder->expr()->orX();
+            foreach($filterReferenceTypes as $filterReferencetype) {
+                $orXReference->add($queryBuilder->expr()->like('references.reference_type', $queryBuilder->createNamedParameter('%' . $queryBuilder->escapeLikeWildcards($filterReferencetype) . '%')));
+            }
+        }
+        $queryBuilder
+            ->select('periodical.uid','periodical.name')
+            ->from('tx_nwcitavi_domain_model_periodical', 'periodical')
+            ->join(
+                'periodical',
+                'tx_nwcitavi_reference_periodical_mm',
+                'mmperiodical',
+                $queryBuilder->expr()->eq('mmperiodical.uid_foreign', 'periodical.uid')
+            );
+        if(is_array($filterCategories)) {
+            $queryBuilder
+                ->join(
+                    'mmperiodical',
+                    'tx_nwcitavi_reference_category_mm',
+                    'mmcategory',
+                    $queryBuilder->expr()->eq('mmcategory.uid_local', 'mmperiodical.uid_local')
+                )
+                ->where(
+                    $orXCategory
+                );
+        }
+        if(is_array($filterAuthors)) {
+            $queryBuilder
+                ->join(
+                    'mmperiodical',
+                    'tx_nwcitavi_reference_authors_mm',
+                    'mmauthor',
+                    $queryBuilder->expr()->eq('mmauthor.uid_local', 'mmperiodical.uid_local')
+                )
+                ->where(
+                    $orXAuthor
+                );
+        }
+        if(is_array($filterPublishers)) {
+            $queryBuilder
+                ->join(
+                    'mmperiodical',
+                    'tx_nwcitavi_reference_publisher_mm',
+                    'mmpublisher',
+                    $queryBuilder->expr()->eq('mmpublisher.uid_local', 'mmperiodical.uid_local')
+                )
+                ->where(
+                    $orXPublisher
+                );
+        }
+        if(is_array($filterKeywords)) {
+            $queryBuilder
+                ->join(
+                    'mmperiodical',
+                    'tx_nwcitavi_reference_keyword_mm',
+                    'mmkeyword',
+                    $queryBuilder->expr()->eq('mmkeyword.uid_local', 'mmperiodical.uid_local')
+                )
+                ->where(
+                    $orXPublisher
+                );
+        }
+        if(is_array($filterReferenceTypes)) {
+            $queryBuilder
+                ->join(
+                    'mmperiodical',
+                    'tx_nwcitavi_domain_model_reference',
+                    'references',
+                    $queryBuilder->expr()->eq('references.uid', 'mmperiodical.uid_local')
+            )
+            ->where(
+                $orXReference
+            );
+        }
+        $queryBuilder
+            ->groupBy('periodical.uid')
+            ->orderBy('periodical.name');
+
+        $statement = $queryBuilder->execute();
+        $i = 0;
+        while ($row = $statement->fetch()) {
+            $res[$i]['uid'] = $row['uid'];
+            $res[$i]['value'] = $row['name'];
+            $i++;
+        }
+        return $res;
     }
-    if(!empty($settings['selectedauthor'])) {
-      $filterAuthors = explode(",", $settings['selectedauthor']);
+
+    /**
+     * Find periodical by citavi ID
+     *
+     * @param $citaviId
+     * @return array|QueryResultInterface
+     */
+    public function findByCitaviId($citaviId) {
+        $query = $this->createQuery();
+        $where = 'citavi_id LIKE \''.$citaviId.'\'';
+        $sql = 'SELECT * FROM tx_nwcitavi_domain_model_periodical WHERE '.$where;
+        $query->statement($sql);
+        return $query->execute();
     }
-    if(!empty($settings['selectedperiodical'])) {
-      $filterPublishers = explode(",", $settings['selectedperiodical']);
+
+    /**
+     * Find periodical by UID
+     *
+     * @param $uid
+     * @return array|QueryResultInterface
+     */
+    public function findPeriodicalsByUid($uid) {
+        $query = $this->createQuery();
+        $where = 'mm.uid_local = '.$uid.' AND p.uid = mm.uid_foreign';
+        $sql = 'SELECT * FROM tx_nwcitavi_domain_model_periodical p, tx_nwcitavi_reference_periodical_mm mm WHERE '.$where;
+        $query->statement($sql);
+        return $query->execute();
     }
-    if(!empty($settings['selectedkeyword'])) {
-      $filterKeywords = explode(",", $settings['selectedkeyword']);
-    }
-    if(!empty($settings['selectedreferencetype'])) {
-      $filterReferencetypes = explode(",", $settings['selectedreferencetype']);
-    }
-    $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable('tx_nwcitavi_domain_model_periodical')->createQueryBuilder();
-    if(is_array($filterCategories)) {
-      $orXCategory = $queryBuilder->expr()->orX();
-      foreach($filterCategories as $filterCategory) {
-        $orXCategory->add($queryBuilder->expr()->eq('mmcategory.uid_foreign', $queryBuilder->createNamedParameter($filterCategory, \PDO::PARAM_INT)));
-      }
-    }
-    if(is_array($filterAuthors)) {
-      $orXAuthor = $queryBuilder->expr()->orX();
-      foreach($filterAuthors as $filterAuthor) {
-        $orXAuthor->add($queryBuilder->expr()->eq('mmauthor.uid_foreign', $queryBuilder->createNamedParameter($filterAuthor, \PDO::PARAM_INT)));
-      }
-    }
-    if(is_array($filterPublishers)) {
-      $orXPublisher = $queryBuilder->expr()->orX();
-      foreach($filterPublishers as $filterPublisher) {
-        $orXPublisher->add($queryBuilder->expr()->eq('mmperiodical.uid_foreign', $queryBuilder->createNamedParameter($filterPublisher, \PDO::PARAM_INT)));
-      }
-    }
-    if(is_array($filterKeywords)) {
-      $orXKeyword = $queryBuilder->expr()->orX();
-      foreach($filterKeywords as $filterKeyword) {
-        $orXKeyword->add($queryBuilder->expr()->eq('mmkeyword.uid_foreign', $queryBuilder->createNamedParameter($filterKeyword, \PDO::PARAM_INT)));
-      }
-    }
-    if(is_array($filterReferencetypes)) {
-      $orXReference = $queryBuilder->expr()->orX();
-      foreach($filterReferencetypes as $filterReferencetype) {
-        $orXReference->add($queryBuilder->expr()->like('references.reference_type', $queryBuilder->createNamedParameter('%' . $queryBuilder->escapeLikeWildcards($filterReferencetype) . '%')));
-      }
-    }
-    $queryBuilder
-      ->select('uid','name')
-      ->from('tx_nwcitavi_domain_model_periodical')
-      ->join(
-        'tx_nwcitavi_domain_model_periodical',
-        'tx_nwcitavi_reference_periodical_mm',
-        'mmperiodical',
-        $queryBuilder->expr()->eq('mmperiodical.uid_foreign', 'tx_nwcitavi_domain_model_periodical.uid')
-      );
-    if(is_array($filterCategories)) {
-      $queryBuilder
-        ->join(
-          'mmperiodical',
-          'tx_nwcitavi_reference_category_mm',
-          'mmcategory',
-          $queryBuilder->expr()->eq('mmcategory.uid_local', 'mmperiodical.uid_local')
-        )
-        ->where(
-          $orXCategory
-        );
-    }
-    if(is_array($filterAuthors)) {
-      $queryBuilder
-        ->join(
-          'mmperiodical',
-          'tx_nwcitavi_reference_authors_periodical_mm',
-          'mmauthor',
-          $queryBuilder->expr()->eq('mmauthor.uid_local', 'mmperiodical.uid_local')
-        )
-        ->where(
-          $orXAuthor
-        );
-    }          
-    if(is_array($filterPublishers)) {
-      $queryBuilder
-        ->join(
-          'mmperiodical',
-          'tx_nwcitavi_reference_periodical_mm',
-          'mmperiodical',
-          $queryBuilder->expr()->eq('mmperiodical.uid_local', 'mmperiodical.uid_local')
-        )
-        ->where(
-          $orXPublisher
-        );
-    }
-    if(is_array($filterKeywords)) {
-      $queryBuilder
-        ->join(
-          'mmperiodical',
-          'tx_nwcitavi_reference_keyword_mm',
-          'mmkeyword',
-          $queryBuilder->expr()->eq('mmkeyword.uid_local', 'mmperiodical.uid_local')
-        )
-        ->where(
-          $orXPublisher
-        );
-    }
-    if(is_array($filterReferencetypes)) {
-      $queryBuilder
-        ->join(
-          'mmperiodical',
-          'tx_nwcitavi_domain_model_reference',
-          'references',
-          $queryBuilder->expr()->eq('references.uid', 'mmperiodical.uid_local')
-        )
-        ->where(
-          $orXReference
-        );
-    }
-    $queryBuilder
-      ->groupBy('tx_nwcitavi_domain_model_periodical.uid')
-      ->orderBy('tx_nwcitavi_domain_model_periodical.name');
-      
-    $statement = $queryBuilder->execute();
-    $i = 0;
-    while ($row = $statement->fetch()) {
-      $res[$i]['uid'] = $row['uid'];
-      $res[$i]['value'] = $row['name'];
-      $i++;
-    }
-    
-    return $res;
-  }
-  
-  public function findByCitaviId($citaviId) {
-    $query = $this->createQuery();
-    $where = 'citavi_id LIKE \''.$citaviId.'\'';
-    $sql = 'SELECT * FROM tx_nwcitavi_domain_model_periodical WHERE '.$where;
-    $query->statement($sql);
-    $res = $query->execute();
-    
-    return $res;
-  }
-  
-  public function findPeriodicalsByUid($uid) {
-    $query = $this->createQuery();
-    $where = 'mm.uid_local = '.$uid.' AND p.uid = mm.uid_foreign';
-    $sql = 'SELECT * FROM tx_nwcitavi_domain_model_periodical p, tx_nwcitavi_reference_periodical_mm mm WHERE '.$where;
-    $query->statement($sql);
-    $res = $query->execute();
-    
-    return $res;
-  }    
 }

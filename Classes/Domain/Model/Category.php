@@ -99,7 +99,7 @@ class Category extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
      * parent
      *
      * @var \TYPO3\CMS\Extbase\Persistence\ObjectStorage<\Netzweber\NwCitavi\Domain\Model\Category>
-     * * @cascade remove
+     * * @TYPO3\CMS\Extbase\Annotation\ORM\Cascade("remove")
      */
     protected $parent = null;
 

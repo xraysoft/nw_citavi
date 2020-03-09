@@ -1,17 +1,52 @@
 <?php
 namespace Netzweber\NwCitavi\Domain\Repository;
 
+use Netzweber\NwCitavi\Domain\Model\Category;
+use Netzweber\NwCitavi\Domain\Model\Keyword;
+use Netzweber\NwCitavi\Domain\Model\KnowledgeItem;
+use Netzweber\NwCitavi\Domain\Model\Library;
+use Netzweber\NwCitavi\Domain\Model\Location;
+use Netzweber\NwCitavi\Domain\Model\Periodical;
+use Netzweber\NwCitavi\Domain\Model\Person;
+use Netzweber\NwCitavi\Domain\Model\Publisher;
+use Netzweber\NwCitavi\Domain\Model\Reference;
+use Netzweber\NwCitavi\Domain\Model\Seriestitle;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Messaging\FlashMessage;
 use TYPO3\CMS\Core\Messaging\FlashMessageService;
+use TYPO3\CMS\Core\Resource\Exception\FileDoesNotExistException;
 use TYPO3\CMS\Core\Resource\Exception\InsufficientFolderAccessPermissionsException;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Extbase\Configuration\ConfigurationManagerInterface;
+use TYPO3\CMS\Extbase\Persistence\Exception\IllegalObjectTypeException;
+use TYPO3\CMS\Extbase\Persistence\Exception\UnknownObjectException;
+use TYPO3\CMS\Extbase\Persistence\Generic\Storage\Typo3DbQueryParser;
+use TYPO3\CMS\Extbase\Persistence\ObjectStorage;
 use TYPO3\CMS\Extbase\Persistence\QueryInterface;
+use TYPO3\CMS\Extbase\Persistence\QueryResultInterface;
+use TYPO3\CMS\Extbase\Persistence\Repository;
+use TYPO3\CMS\Extbase\Utility\DebuggerUtility;
 use TYPO3\CMS\Extbase\Utility\LocalizationUtility;
 use TYPO3\CMS\Core\Utility\File\ExtendedFileUtility;
 use ZipArchive;
 use TYPO3\CMS\Extbase\Object\ObjectManager;
+use TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController;
+use Netzweber\NwCitavi\Domain\Repository\CategoryRepository;
+use TYPO3\CMS\Extbase\Persistence\Generic\PersistenceManager;
+use Netzweber\NwCitavi\Domain\Repository\KeywordRepository;
+use Netzweber\NwCitavi\Domain\Repository\LibraryRepository;
+use Netzweber\NwCitavi\Domain\Repository\PeriodicalRepository;
+use Netzweber\NwCitavi\Domain\Repository\PersonRepository;
+use Netzweber\NwCitavi\Domain\Repository\PublisherRepository;
+use Netzweber\NwCitavi\Domain\Repository\SeriestitleRepository;
+use Netzweber\NwCitavi\Domain\Repository\KnowledgeItemRepository;
+use Netzweber\NwCitavi\Domain\Repository\LocationRepository;
+use TYPO3\CMS\Core\Resource\Driver\LocalDriver;
+use TYPO3\CMS\Core\Resource\StorageRepository;
+use Netzweber\NwCitavi\Domain\Model\FileReference;
+use TYPO3\CMS\Frontend\Page\PageRepository;
+use TYPO3\CMS\Extbase\Configuration\ConfigurationManager;
 
 /***
  *
@@ -25,19 +60,21 @@ use TYPO3\CMS\Extbase\Object\ObjectManager;
  *
  ***/
 
-/**
- * The repository for Logs
- */
-class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
+class ReferenceRepository extends Repository
 {
 
     /**
-  	 * logRepository
-  	 *
-  	 * @var \Netzweber\NwCitavi\Domain\Repository\LogRepository
-  	 * @inject
-  	 */
-  	protected $logRepository = NULL;
+     * @var LogRepository
+     */
+    protected $logRepository;
+
+    /**
+     * @param LogRepository $logRepository
+     */
+    public function injectLogRepository(LogRepository $logRepository)
+    {
+        $this->logRepository = $logRepository;
+    }
 
     protected $hashRepository = NULL;
 
@@ -55,2666 +92,2159 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         $this->setDefaultQuerySettings($querySettings);
     }
 
-    public function parseXML($step, $startTime, $uniqid) {
-      $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload');
-      $this->key = $_POST['import_key'];
-      $fileInfo = $this->lastModification($this->dir);
-      $fileName = $fileInfo['dir'].$fileInfo['file'];
-      $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi_citavilist.']['settings.'];
-      if($step == 99) {
-        file_put_contents($this->dir.'/scheduler.txt', $fileName.'|'.$this->key.'|'.$uniqid, FILE_APPEND);
-
-        return 99;
-      } else {
-        $this->xml = new \XMLReader();
-        $this->xml->open($fileName);
-        $xmlstring = implode("", file($fileName));
-        $xml = simplexml_load_string($xmlstring);
+    /**
+     * Parse complete xml import at once
+     *
+     * @param $step
+     * @param $startTime
+     * @param $uniqueId
+     * @return int|null
+     */
+    public function parseXML($step, $startTime, $uniqueId): ?int
+    {
+        $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload');
+        $key = $_POST['import_key'];
+        $fileInfo = $this->lastModification($dir);
+        $fileName = $fileInfo['dir'].$fileInfo['file'];
+        $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi_citavilist.']['settings.'];
+        if($step === 99) {
+            file_put_contents($dir.'/scheduler.txt', $fileName.'|'.$key.'|'.$uniqueId, FILE_APPEND);
+            return 99;
+        }
+        $xml = new \XMLReader();
+        $xml->open($fileName);
+        $xmlString = implode('', file($fileName));
+        $xml = simplexml_load_string($xmlString);
         $json = json_encode($xml);
         $array = json_decode($json,TRUE);
-        $contents = var_export($array, true);
-        $xmlObj = new \SimpleXMLElement($xmlstring);
-
+        $xmlObj = new \SimpleXMLElement($xmlString);
         switch($step) {
-          case 1:
-            $startTime = time();
-            file_put_contents($this->dir.'/log/upload.txt', date('d.m.Y H:i:s', $startTime).'|', FILE_APPEND);
-            try {
-              if ( is_array( $array['Categories']['Category'] ) ) {
-                $categoryCount = count($array['Categories']['Category']);
-                $this->truncateDatabase('tx_nwcitavi_domain_model_categoryhash');
-                for($i = 0; $i < $categoryCount; $i++) {
-                  $category = $array['Categories']['Category'][$i];
-
-                  if(strlen($category['@attributes']['ID']) > 0) {
-                    $refstr = $this->generatedHash($category);
-                    $this->hash = hash("md5", $refstr);
-                    $this->insertInHashTable('CategoryHashRepository', 'CategoryHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
-                    $columnExists = $this->columnExists('CategoryRepository', $category['@attributes']['ID'], 'tx_nwcitavi_domain_model_category');
-
-                    $this->setDatabase($category, 'Category', $columnExists, $settings);
-
-                    if ( is_array( $category['Categories']['Category'] ) ) {
-                      $subCategoryCount = count($category['Categories']['Category']);
-                      for($j = 0; $j < $subCategoryCount; $j++) {
-                        $subcategory = $category['Categories']['Category'][$j];
-                        if(strlen($subcategory['@attributes']['ID']) > 0) {
-                          $refstr = $this->generatedHash($subcategory);
-                          $this->hash = hash("md5", $refstr);
-                          $this->insertInHashTable('CategoryHashRepository', 'CategoryHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
-                          $columnExists = $this->columnExists('CategoryRepository', $subcategory['@attributes']['ID'], 'tx_nwcitavi_domain_model_category');
-
-                          $this->setDatabase($subcategory, 'Category', $columnExists, $settings, $category['@attributes']['ID']);
-                        }
-
-                        if ( is_array( $subcategory['Categories']['Category'] ) ) {
-                          $subsubCategoryCount = count($subcategory['Categories']['Category']);
-                          for($k = 0; $k < $subsubCategoryCount; $k++) {
-                            $subsubcategory = $subcategory['Categories']['Category'][$k];
-                            if(strlen($subsubcategory['@attributes']['ID']) > 0) {
-                              $refstr = $this->generatedHash($subsubcategory);
-                              $this->hash = hash("md5", $refstr);
-                              $this->insertInHashTable('CategoryHashRepository', 'CategoryHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
-                              $columnExists = $this->columnExists('CategoryRepository', $subsubcategory['@attributes']['ID'], 'tx_nwcitavi_domain_model_category');
-
-                              $this->setDatabase($subsubcategory, 'Category', $columnExists, $settings, $subcategory['@attributes']['ID']);
+            case 1:
+                $startTime = time();
+                file_put_contents($dir.'/log/upload.txt', date('d.m.Y H:i:s', $startTime).'|', FILE_APPEND);
+                try {
+                    if ( is_array( $array['Categories']['Category'] ) ) {
+                        $this->truncateDatabase('tx_nwcitavi_domain_model_categoryhash');
+                        foreach ($array['Categories']['Category'] as $iValue) {
+                            $category = $iValue;
+                            if(!empty($category['@attributes']['ID'])) {
+                                $refStr = $this->generatedHash($category);
+                                $hash = hash('md5', $refStr);
+                                $this->insertInHashTable( 'CategoryHash', $hash, ($settings['sPid']) ?: '0');
+                                $columnExists = $this->columnExists('CategoryRepository', $category['@attributes']['ID'], 'tx_nwcitavi_domain_model_category');
+                                $this->setDatabase($category, 'Category', $columnExists, $hash, $key, $uniqueId, $settings);
+                                if ( is_array( $category['Categories']['Category'] ) ) {
+                                    foreach ($category['Categories']['Category'] as $jValue) {
+                                        $subcategory = $jValue;
+                                        if(!empty($subcategory['@attributes']['ID'])) {
+                                            $refStr = $this->generatedHash($subcategory);
+                                            $hash = hash('md5', $refStr);
+                                            $this->insertInHashTable( 'CategoryHash', $hash, ($settings['sPid']) ?: '0');
+                                            $columnExists = $this->columnExists('CategoryRepository', $subcategory['@attributes']['ID'], 'tx_nwcitavi_domain_model_category');
+                                            $this->setDatabase($subcategory, 'Category', $columnExists, $hash, $key, $uniqueId, $settings, $category['@attributes']['ID']);
+                                        }
+                                        if ( is_array( $subcategory['Categories']['Category'] ) ) {
+                                            foreach ($subcategory['Categories']['Category'] as $kValue) {
+                                                $subSubCategory = $kValue;
+                                                if(!empty($subSubCategory['@attributes']['ID'])) {
+                                                    $refStr = $this->generatedHash($subSubCategory);
+                                                    $hash = hash('md5', $refStr);
+                                                    $this->insertInHashTable( 'CategoryHash', $hash, ($settings['sPid']) ?: '0');
+                                                    $columnExists = $this->columnExists('CategoryRepository', $subSubCategory['@attributes']['ID'], 'tx_nwcitavi_domain_model_category');
+                                                    $this->setDatabase($subSubCategory, 'Category', $columnExists, $hash, $key, $uniqueId, $settings, $subcategory['@attributes']['ID']);
+                                                }
+                                            }
+                                        }
+                                        unset($subSubCategory, $subSubCategoryAttributes, $dbSubSubCat, $subSubCatUid);
+                                    }
+                                }
+                                unset($subcategory, $subCategoryAttributes, $db_subCat, $subCatUid);
                             }
-
-                          }
+                            unset($category, $categoryAttributes, $db_cat, $catUid);
                         }
-                        unset($subsubcategory, $subsubCategoryAttributes, $db_subsubCat, $subsubCatUid);
-                      }
                     }
-                    unset($subcategory, $subCategoryAttributes, $db_subCat, $subCatUid);
-                  }
-                  unset($category, $categoryAttributes, $db_cat, $catUid);
+                } catch (Exception $e) {
+                    $this->logRepository->addLog(1, 'Categories could not be generated. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
                 }
-              }
-            } catch (Exception $e) {
-              $this->logRepository->addLog(1, 'Categories could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-            }
-            $this->xml->close();
-            $params['step'] = $step + 1;
-            $params['startTime'] = $startTime;
-            $params['uniqid'] = $uniqid;
-
-            return $params;
-          exit;
-
-          case 2:
-            try {
-              if ( is_array( $array['Keywords']['Keyword'] ) ) {
-                $keywordsCount = count($array['Keywords']['Keyword']);
-                $this->truncateDatabase('tx_nwcitavi_domain_model_keywordhash');
-                for($i = 0; $i < $keywordsCount; $i++) {
-                  $keyword = $array['Keywords']['Keyword'][$i];
-                  if(strlen($keyword['@attributes']['ID']) > 0) {
-                    $refstr = $this->generatedHash($keyword);
-                    $this->hash = hash("md5", $refstr);
-                    $this->insertInHashTable('KeywordHashRepository', 'KeywordHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
-                    $columnExists = $this->columnExists('KeywordRepository', $keyword['@attributes']['ID'], 'tx_nwcitavi_domain_model_keyword');
-
-                    $this->setDatabase($keyword, 'Keyword', $columnExists, $settings);
-                  }
-                  unset($keyword, $keywordAttributes, $db_keyword, $keywordUid);
-                }
-              }
-            } catch (Exception $e) {
-              $this->logRepository->addLog(1, 'Keywords could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-            }
-            $this->xml->close();
-
-            $params['step'] = $step + 1;
-            $params['startTime'] = $startTime;
-            $params['uniqid'] = $uniqid;
-
-            return $params;
-          exit;
-
-          case 3:
-            try {
-              if ( is_array( $array['Libraries']['Library'] ) ) {
-                $librariesCount = count($array['Libraries']['Library']);
-                $this->truncateDatabase('tx_nwcitavi_domain_model_libraryhash');
-                for($i = 0; $i < $librariesCount; $i++) {
-                  $library = $array['Libraries']['Library'][$i];
-                  if(strlen($library['@attributes']['ID']) > 0) {
-                    $refstr = $this->generatedHash($library);
-                    $this->hash = hash("md5", $refstr);
-                    $this->insertInHashTable('LibraryHashRepository', 'LibraryHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
-                    $columnExists = $this->columnExists('LibraryRepository', $library['@attributes']['ID'], 'tx_nwcitavi_domain_model_library');
-
-                    $this->setDatabase($library, 'Library', $columnExists, $settings);
-                  }
-                  unset($library, $libraryAttributes, $db_library, $libraryUid);
-                }
-              }
-            } catch (Exception $e) {
-              $this->logRepository->addLog(1, 'Libraries could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-            }
-            $this->xml->close();
-
-            $params['step'] = $step + 1;
-            $params['startTime'] = $startTime;
-            $params['uniqid'] = $uniqid;
-
-            return $params;
-          exit;
-
-          case 4:
-            try {
-              if ( is_array( $array['Periodicals']['Periodical'] ) ) {
-                $periodicalsCount = count($array['Periodicals']['Periodical']);
-                $this->truncateDatabase('tx_nwcitavi_domain_model_periodicalhash');
-                for($i = 0; $i < $periodicalsCount; $i++) {
-                  $periodical = $array['Periodicals']['Periodical'][$i];
-                  if(strlen($periodical['@attributes']['ID']) > 0) {
-                    $refstr = $this->generatedHash($periodical);
-                    $this->hash = hash("md5", $refstr);
-                    $this->insertInHashTable('PeriodicalHashRepository', 'PeriodicalHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
-                    $columnExists = $this->columnExists('PeriodicalRepository', $periodical['@attributes']['ID'], 'tx_nwcitavi_domain_model_periodical');
-
-                    $this->setDatabase($periodical, 'Periodical', $columnExists, $settings);
-                  }
-                  unset($periodical, $periodicalAttributes, $db_periodical, $periodicalUid);
-                }
-              }
-            } catch (Exception $e) {
-              $this->logRepository->addLog(1, 'Periodicals could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-            }
-            $this->xml->close();
-
-            $params['step'] = $step + 1;
-            $params['startTime'] = $startTime;
-            $params['uniqid'] = $uniqid;
-
-            return $params;
-          exit;
-
-          case 5:
-            try {
-              if ( is_array( $array['Persons']['Person'] ) ) {
-                $personsCount = count($array['Persons']['Person']);
-                $this->truncateDatabase('tx_nwcitavi_domain_model_personhash');
-                for($i = 0; $i < $personsCount; $i++) {
-                  $person = $array['Persons']['Person'][$i];
-                  if(strlen($person['@attributes']['ID']) > 0) {
-                    $refstr = $this->generatedHash($person);
-                    $this->hash = hash("md5", $refstr);
-                    $this->insertInHashTable('PersonHashRepository', 'PersonHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
-                    $columnExists = $this->columnExists('PersonRepository', $person['@attributes']['ID'], 'tx_nwcitavi_domain_model_person');
-
-                    $this->setDatabase($person, 'Person', $columnExists, $settings);
-                  }
-                  unset($person, $personAttributes, $db_person, $personUid);
-                }
-              }
-            } catch (Exception $e) {
-              $this->logRepository->addLog(1, 'Persons could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-            }
-            $this->xml->close();
-
-            $params['step'] = $step + 1;
-            $params['startTime'] = $startTime;
-            $params['uniqid'] = $uniqid;
-
-            return $params;
-          exit;
-
-          case 6:
-            try {
-              if ( is_array( $array['Publishers']['Publisher'] ) ) {
-                $publishersCount = count($array['Publishers']['Publisher']);
-                $this->truncateDatabase('tx_nwcitavi_domain_model_publisherhash');
-                for($i = 0; $i < $publishersCount; $i++) {
-                  $publisher = $array['Publishers']['Publisher'][$i];
-                  if(strlen($publisher['@attributes']['ID']) > 0) {
-                    $refstr = $this->generatedHash($publisher);
-                    $this->hash = hash("md5", $refstr);
-                    $this->insertInHashTable('PublisherHashRepository', 'PublisherHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
-                    $columnExists = $this->columnExists('PublisherRepository', $publisher['@attributes']['ID'], 'tx_nwcitavi_domain_model_publisher');
-
-                    $this->setDatabase($publisher, 'Publisher', $columnExists, $settings);
-                  }
-                  unset($publisher, $publisherAttributes, $db_publisher, $publisherUid);
-                }
-              }
-            } catch (Exception $e) {
-              $this->logRepository->addLog(1, 'Publishers could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-            }
-            $this->xml->close();
-
-            $params['step'] = $step + 1;
-            $params['startTime'] = $startTime;
-            $params['uniqid'] = $uniqid;
-
-            return $params;
-          exit;
-
-          case 7:
-            try {
-              if ( is_array( $array['SeriesTitles']['SeriesTitle'] ) ) {
-                $seriestitlesCount = count($array['SeriesTitles']['SeriesTitle']);
-                $this->truncateDatabase('tx_nwcitavi_domain_model_seriestitlehash');
-                for($i = 0; $i < $seriestitlesCount; $i++) {
-                  $seriestitle = $array['SeriesTitles']['SeriesTitle'][$i];
-                  if(strlen($seriestitle['@attributes']['ID']) > 0) {
-                    $refstr = $this->generatedHash($seriestitle);
-                    $this->hash = hash("md5", $refstr);
-                    $this->insertInHashTable('SeriestitleHashRepository', 'SeriestitleHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
-                    $columnExists = $this->columnExists('SeriestitleRepository', $seriestitle['@attributes']['ID'], 'tx_nwcitavi_domain_model_seriestitle');
-
-                    $this->setDatabase($seriestitle, 'SeriesTitle', $columnExists, $settings);
-                  }
-                  unset($seriestitle, $seriestitleAttributes, $db_seriestitle, $seriestitleUid);
-                }
-              }
-            } catch (Exception $e) {
-              $this->logRepository->addLog(1, 'Seriestitles could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-            }
-            $this->xml->close();
-
-            $params['step'] = $step + 1;
-            $params['startTime'] = $startTime;
-            $params['uniqid'] = $uniqid;
-
-            return $params;
-          exit;
-
-          case 8:
-            try {
-              if ( is_array( $array['Thoughts']['KnowledgeItem'] ) ) {
-                $knowledgeitemsCount = count($array['Thoughts']['KnowledgeItem']);
-                $this->truncateDatabase('tx_nwcitavi_domain_model_knowledgeitemhash');
-                for($i = 0; $i < $knowledgeitemsCount; $i++) {
-                  $knowledgeitem = $array['Thoughts']['KnowledgeItem'][$i];
-                  if(strlen($knowledgeitem['@attributes']['ID']) > 0) {
-                    $refstr = $this->generatedHash($knowledgeitem);
-                    $this->hash = hash("md5", $refstr);
-                    $this->insertInHashTable('KnowledgeItemHashRepository', 'KnowledgeItemHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
-                    $columnExists = $this->columnExists('KnowledgeItemRepository', $knowledgeitem['@attributes']['ID'], 'tx_nwcitavi_domain_model_knowledgeitem');
-
-                    $this->setDatabase($seriestitle, 'KnowledgeItem', $columnExists, $settings);
-                  }
-                  unset($knowledgeitem, $knowledgeitemAttributes, $db_knowledgeitem, $knowledgeitemUid);
-                }
-              }
-            } catch (Exception $e) {
-              $this->logRepository->addLog(1, 'Knowledgeitems could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-            }
-            $this->xml->close();
-
-            $params['step'] = $step + 1;
-            $params['startTime'] = $startTime;
-            $params['uniqid'] = $uniqid;
-
-            return $params;
-          exit;
-
-          case 9:
-            try {
-              if ( is_array( $array['References']['Reference'] ) ) {
-                $refCount = count($array['References']['Reference']);
-                $this->truncateDatabase('tx_nwcitavi_domain_model_referencehash');
-                $this->truncateDatabase('tx_nwcitavi_domain_model_locationhash');
-                for($i = 0; $i < $refCount; $i++) {
-                  $ref = $array['References']['Reference'][$i];
-                  switch($ref['@attributes']['ReferenceType']) {
-                    case 'BookEdited';
-                      $this->sortDate = $ref['Year'];
-                      break;
-                    case 'Book';
-                      $this->sortDate = $ref['Year'];
-                      break;
-                    case 'JournalArticle';
-                      $this->sortDate = $ref['Year'];
-                      break;
-                    case 'NewspaperArticle';
-                      $this->sortDate = $ref['Date'];
-                      break;
-                    case 'PersonalCommunication';
-                      $this->sortDate = $ref['Date'];
-                      break;
-                    case 'Unknown';
-                      $this->sortDate = $ref['Date'];
-                      break;
-                    case 'UnpublishedWork';
-                      $this->sortDate = $ref['Date'];
-                      break;
-                    case 'ConferenceProceedings';
-                      $this->sortDate = $ref['Year'];
-                      break;
-                    case 'Contribution';
-                      $db_parentref = $this->checkIfEntryExists('tx_nwcitavi_domain_model_reference', 'citavi_id', $ref['ParentReferenceID']);
-                      $this->sortDate = $db_parentref['sort_date'];
-                      break;
-                    case 'Lecture';
-                      $this->sortDate = $ref['Date'];
-                      break;
-                    case 'PressRelease';
-                      $this->sortDate = $ref['Date'];
-                      break;
-                    case 'SpecialIssue';
-                      $this->sortDate = $ref['Year'];
-                      break;
-                    case 'Thesis';
-                      $this->sortDate = $ref['Date'];
-                      break;
-                    case 'InternetDocument';
-                      $this->sortDate = $ref['Year'];
-                      break;
-                    default:
-                      $this->sortDate = $ref['Date'];
-                  }
-                  if(strlen($ref['ParentReferenceID']) > 0) {
-                    $parent = $xmlObj->xpath("//Reference[@ID='".$ref['ParentReferenceID']."']");
-                    $this->parentReferenceType = (string)$parent[0]['ReferenceType'];
-                    $this->db_parentref = $this->checkIfEntryExists('tx_nwcitavi_domain_model_reference', 'citavi_id', $ref['ParentReferenceID']);
-                    $this->sortDate = $db_parentref['sort_date'];
-                  }
-
-                  if(strlen($ref['@attributes']['ID']) > 0) {
-                    $refstr = $this->generatedHash($ref);
-                    $this->hash = hash("md5", $refstr);
-                    $this->insertInHashTable('ReferenceHashRepository', 'ReferenceHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
-                    $columnExists = $this->columnExists('ReferenceRepository', $ref['@attributes']['ID'], 'tx_nwcitavi_domain_model_reference');
-
-                    $this->setDatabase($ref, 'Reference', $columnExists, $settings);
-
-                    // Locations speichern
-                    if($array['References']['Reference'][$i]['Locations']['Location']['@attributes']) {
-                      $location = $array['References']['Reference'][$i]['Locations']['Location'];
-                      if(strlen($location['@attributes']['ID']) > 0) {
-                        $locationstr = $this->generatedHash($location);
-                        $this->hash = hash("md5", $locationstr);
-                        $this->insertInHashTable('LocationHashRepository', 'LocationHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
-                        $columnExists = $this->columnExists('LocationRepository', $location['@attributes']['ID'], 'tx_nwcitavi_domain_model_location');
-
-                        $this->setDatabase($location, 'Location', $columnExists, $settings);
-
-                        // Location verknüpfen
-                        $this->updateReferenceLocation($ref, $location['@attributes']['ID']);
-
-                        //Libraries verknüpfen
-                        if(strlen($array['References']['Reference'][$i]['Locations']['Location']['LibraryID']) > 0) {
-                          $this->updateLocationLibrary($location['@attributes']['ID'], $array['References']['Reference'][$i]['Locations']['Location']['LibraryID']);
-                        }
-                      }
-                      unset($location, $locationAttributes, $db_location, $locationUid);
-                    } else {
-                      if ( is_array( $array['References']['Reference'][$i]['Locations']['Location'] ) ) {
-                        $locationsCount = count($array['References']['Reference'][$i]['Locations']['Location']);
-                        for($j = 0; $j < $locationsCount; $j++) {
-                          $location = $array['References']['Reference'][$i]['Locations']['Location'][$j];
-                          if(strlen($location['@attributes']['ID']) > 0) {
-                            $locationstr = $this->generatedHash($location);
-                            $this->hash = hash("md5", $locationstr);
-                            $this->insertInHashTable('LocationHashRepository', 'LocationHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
-                            $columnExists = $this->columnExists('LocationRepository', $location['@attributes']['ID'], 'tx_nwcitavi_domain_model_location');
-
-                            $this->setDatabase($location, 'Location', $columnExists, $settings);
-
-                            // Location verknüpfen
-                            $this->updateReferenceLocation($ref, $location['@attributes']['ID']);
-
-                            //Libraries verknüpfen
-                            if(strlen($array['References']['Reference'][$i]['Locations']['Location'][$j]['LibraryID']) > 0) {
-                              $this->updateLocationLibrary($location['@attributes']['ID'], $array['References']['Reference'][$i]['Locations']['Location'][$j]['LibraryID']);
+                $params['step'] = $step + 1;
+                $params['startTime'] = $startTime;
+                $params['uniqid'] = $uniqueId;
+                return $params;
+                break;
+            case 2:
+                try {
+                    if ( is_array( $array['Keywords']['Keyword'] ) ) {
+                        $this->truncateDatabase('tx_nwcitavi_domain_model_keywordhash');
+                        foreach ($array['Keywords']['Keyword'] as $iValue) {
+                            $keyword = $iValue;
+                            if(!empty($keyword['@attributes']['ID'])) {
+                                $refStr = $this->generatedHash($keyword);
+                                $hash = hash('md5', $refStr);
+                                $this->insertInHashTable( 'KeywordHash', $hash, ($settings['sPid']) ?: '0');
+                                $columnExists = $this->columnExists('KeywordRepository', $keyword['@attributes']['ID'], 'tx_nwcitavi_domain_model_keyword');
+                                $this->setDatabase($keyword, 'Keyword', $columnExists, $hash, $key, $uniqueId, $settings);
                             }
-                          }
+                            unset($keyword, $keywordAttributes, $db_keyword, $keywordUid);
                         }
-                      }
-                      unset($location, $locationAttributes, $db_location, $locationUid);
                     }
-                  }
-                  unset($ref, $refAttributes, $db_ref, $refUid);
+                } catch (Exception $e) {
+                    $this->logRepository->addLog(1, 'Keywords could not be generated. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
                 }
-                $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_reference', 'tx_nwcitavi_domain_model_referencehash', $settings);
-                $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_keyword', 'tx_nwcitavi_domain_model_keywordhash', $settings);
-                $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_library', 'tx_nwcitavi_domain_model_libraryhash', $settings);
-                $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_periodical', 'tx_nwcitavi_domain_model_periodicalhash', $settings);
-                $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_person', 'tx_nwcitavi_domain_model_personhash', $settings);
-                $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_publisher', 'tx_nwcitavi_domain_model_publisherhash', $settings);
-                $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_seriestitle', 'tx_nwcitavi_domain_model_seriestitlehash', $settings);
-                $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_knowledgeitem', 'tx_nwcitavi_domain_model_knowledgeitemhash', $settings);
-              }
-            } catch (Exception $e) {
-              $this->logRepository->addLog(1, 'References could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-            }
-            $this->xml->close();
-
-            unlink($fileName);
-
-            $endTime = time();
-
-            file_put_contents($this->dir.'/log/upload.txt', date('d.m.Y H:i:s', $endTime).chr(13).chr(10), FILE_APPEND);
-
-            $to = $settings['email'];
-            $html = '<p>Der Scheduler wurde um '.date('H:i:s', $startTime).' Uhr gestartet und wurde für '.date('H:i:s', ($endTime - $startTime - 3600)).' Minuten ausgeführt. Beendet wurder der Scheduler um '.date('H:i:s', $endTime).' Uhr</p>';
-            $subject = $settings['subject'];
-            $plain = strip_tags($html);
-            $fromEmail = 'noreply@netzweber.de';
-            $fromName = 'Netzweber GmbH';
-            $replyToEmail = 'lutz.eckelmann@netzweber.de';
-            $replyToName = 'Netzweber GmbH';
-            $returnPath = '';
-
-            $resParseXML = $this->sendMail($to, $subject, $html, $plain, $fromEmail, $fromName, $replyToEmail, $replyToName, $returnPath, $attachements = array());
-
-            $params['step'] = $step + 1;
-            $params['startTime'] = $startTime;
-            $params['uniqid'] = $uniqid;
-
-            return $params;
-          exit;
+                $params['step'] = $step + 1;
+                $params['startTime'] = $startTime;
+                $params['uniqid'] = $uniqueId;
+                return $params;
+                break;
+            case 3:
+                try {
+                    if ( is_array( $array['Libraries']['Library'] ) ) {
+                        $this->truncateDatabase('tx_nwcitavi_domain_model_libraryhash');
+                        foreach ($array['Libraries']['Library'] as $iValue) {
+                            $library = $iValue;
+                            if(!empty($library['@attributes']['ID'])) {
+                                $refStr = $this->generatedHash($library);
+                                $hash = hash('md5', $refStr);
+                                $this->insertInHashTable( 'LibraryHash', $hash, ($settings['sPid']) ?: '0');
+                                $columnExists = $this->columnExists('LibraryRepository', $library['@attributes']['ID'], 'tx_nwcitavi_domain_model_library');
+                                $this->setDatabase($library, 'Library', $columnExists, $hash, $key, $uniqueId, $settings);
+                            }
+                            unset($library, $libraryAttributes, $db_library, $libraryUid);
+                        }
+                    }
+                } catch (Exception $e) {
+                    $this->logRepository->addLog(1, 'Libraries could not be generated. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                }
+                $params['step'] = $step + 1;
+                $params['startTime'] = $startTime;
+                $params['uniqid'] = $uniqueId;
+                return $params;
+                break;
+            case 4:
+                try {
+                    if ( is_array( $array['Periodicals']['Periodical'] ) ) {
+                        $this->truncateDatabase('tx_nwcitavi_domain_model_periodicalhash');
+                        foreach ($array['Periodicals']['Periodical'] as $iValue) {
+                            $periodical = $iValue;
+                            if(!empty($periodical['@attributes']['ID'])) {
+                                $refStr = $this->generatedHash($periodical);
+                                $hash = hash('md5', $refStr);
+                                $this->insertInHashTable( 'PeriodicalHash', $hash, ($settings['sPid']) ?: '0');
+                                $columnExists = $this->columnExists('PeriodicalRepository', $periodical['@attributes']['ID'], 'tx_nwcitavi_domain_model_periodical');
+                                $this->setDatabase($periodical, 'Periodical', $columnExists, $hash, $key, $uniqueId, $settings);
+                            }
+                            unset($periodical, $periodicalAttributes, $db_periodical, $periodicalUid);
+                        }
+                    }
+                } catch (Exception $e) {
+                    $this->logRepository->addLog(1, 'Periodicals could not be generated. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                }
+                $params['step'] = $step + 1;
+                $params['startTime'] = $startTime;
+                $params['uniqid'] = $uniqueId;
+                return $params;
+                break;
+            case 5:
+                try {
+                    if ( is_array( $array['Persons']['Person'] ) ) {
+                        $this->truncateDatabase('tx_nwcitavi_domain_model_personhash');
+                        foreach ($array['Persons']['Person'] as $iValue) {
+                            $person = $iValue;
+                            if(!empty($person['@attributes']['ID'])) {
+                                $refStr = $this->generatedHash($person);
+                                $hash = hash('md5', $refStr);
+                                $this->insertInHashTable( 'PersonHash', $hash, ($settings['sPid']) ?: '0');
+                                $columnExists = $this->columnExists('PersonRepository', $person['@attributes']['ID'], 'tx_nwcitavi_domain_model_person');
+                                $this->setDatabase($person, 'Person', $columnExists, $hash, $key, $uniqueId, $settings);
+                            }
+                            unset($person, $personAttributes, $db_person, $personUid);
+                        }
+                    }
+                } catch (Exception $e) {
+                    $this->logRepository->addLog(1, 'Persons could not be generated. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                }
+                $params['step'] = $step + 1;
+                $params['startTime'] = $startTime;
+                $params['uniqid'] = $uniqueId;
+                return $params;
+                break;
+            case 6:
+                try {
+                    if ( is_array( $array['Publishers']['Publisher'] ) ) {
+                        $this->truncateDatabase('tx_nwcitavi_domain_model_publisherhash');
+                        foreach ($array['Publishers']['Publisher'] as $iValue) {
+                            $publisher = $iValue;
+                            if(!empty($publisher['@attributes']['ID'])) {
+                                $refStr = $this->generatedHash($publisher);
+                                $hash = hash('md5', $refStr);
+                                $this->insertInHashTable( 'PublisherHash', $hash, ($settings['sPid']) ?: '0');
+                                $columnExists = $this->columnExists('PublisherRepository', $publisher['@attributes']['ID'], 'tx_nwcitavi_domain_model_publisher');
+                                $this->setDatabase($publisher, 'Publisher', $columnExists, $hash, $key, $uniqueId, $settings);
+                            }
+                            unset($publisher, $publisherAttributes, $db_publisher, $publisherUid);
+                        }
+                    }
+                } catch (Exception $e) {
+                    $this->logRepository->addLog(1, 'Publishers could not be generated. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                }
+                $params['step'] = $step + 1;
+                $params['startTime'] = $startTime;
+                $params['uniqid'] = $uniqueId;
+                return $params;
+                break;
+            case 7:
+                try {
+                    if ( is_array( $array['SeriesTitles']['SeriesTitle'] ) ) {
+                        $this->truncateDatabase('tx_nwcitavi_domain_model_seriestitlehash');
+                        foreach ($array['SeriesTitles']['SeriesTitle'] as $iValue) {
+                            $seriesTitle = $iValue;
+                            if(!empty($seriesTitle['@attributes']['ID'])) {
+                                $refStr = $this->generatedHash($seriesTitle);
+                                $hash = hash('md5', $refStr);
+                                $this->insertInHashTable( 'SeriestitleHash', $hash, ($settings['sPid']) ?: '0');
+                                $columnExists = $this->columnExists('SeriestitleRepository', $seriesTitle['@attributes']['ID'], 'tx_nwcitavi_domain_model_seriestitle');
+                                $this->setDatabase($seriesTitle, 'SeriesTitle', $columnExists, $hash, $key, $uniqueId, $settings);
+                            }
+                            unset($seriesTitle, $seriesTitleAttributes, $dbSeriesTitle, $seriesTitleUid);
+                        }
+                    }
+                } catch (Exception $e) {
+                    $this->logRepository->addLog(1, 'Seriestitles could not be generated. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                }
+                $params['step'] = $step + 1;
+                $params['startTime'] = $startTime;
+                $params['uniqid'] = $uniqueId;
+                return $params;
+                break;
+            case 8:
+                try {
+                    if ( is_array( $array['Thoughts']['KnowledgeItem'] ) ) {
+                        $this->truncateDatabase('tx_nwcitavi_domain_model_knowledgeitemhash');
+                        foreach ($array['Thoughts']['KnowledgeItem'] as $iValue) {
+                        	$knowledgeItem = $iValue;
+                        	if(!empty($knowledgeItem['@attributes']['ID'])) {
+                        	    $refStr = $this->generatedHash($knowledgeItem);
+                        	    $hash = hash('md5', $refStr);
+                        	    $this->insertInHashTable( 'KnowledgeItemHash', $hash, ($settings['sPid']) ?: '0');
+                        	    $columnExists = $this->columnExists('KnowledgeItemRepository', $knowledgeItem['@attributes']['ID'], 'tx_nwcitavi_domain_model_knowledgeitem');
+                        	    $this->setDatabase($knowledgeItem, 'KnowledgeItem', $columnExists, $hash, $key, $uniqueId, $settings);
+                        	}
+                        	unset($knowledgeItem, $knowledgeItemAttributes, $dbKnowledgeItem, $knowledgeItemUid);
+                        }
+                    }
+                } catch (Exception $e) {
+                    $this->logRepository->addLog(1, 'Knowledgeitems could not be generated. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                }
+                $params['step'] = $step + 1;
+                $params['startTime'] = $startTime;
+                $params['uniqid'] = $uniqueId;
+                return $params;
+                break;
+            case 9:
+                try {
+                    if ( is_array( $array['References']['Reference'] ) ) {
+                        $this->truncateDatabase('tx_nwcitavi_domain_model_referencehash');
+                        $this->truncateDatabase('tx_nwcitavi_domain_model_locationhash');
+                        foreach ($array['References']['Reference'] as $i => $iValue) {
+                            $ref = $iValue;
+                            switch($ref['@attributes']['ReferenceType']) {
+                                case 'BookEdited':
+                                case 'InternetDocument':
+                                case 'Book':
+                                case 'JournalArticle':
+                                case 'ConferenceProceedings':
+                                case 'SpecialIssue':
+                                    $ref['sortDate'] = $ref['Year'];
+                                    break;
+                                case 'NewspaperArticle':
+                                case 'PersonalCommunication':
+                                case 'Unknown':
+                                case 'UnpublishedWork':
+                                case 'Lecture':
+                                case 'PressRelease':
+                                case 'Thesis':
+                                    $ref['sortDate'] = $ref['Date'];
+                                    break;
+                                case 'Contribution':
+                                    $dbParentRef = $this->checkIfEntryExists('tx_nwcitavi_domain_model_reference', 'citavi_id', $ref['ParentReferenceID']);
+                                    $ref['sortDate'] = $dbParentRef['sort_date'];
+                                    break;
+                                default:
+                                    $ref['sortDate'] = $ref['Date'];
+                            }
+                            if(!empty($ref['ParentReferenceID'])) {
+                                $parent = $xmlObj->xpath("//Reference[@ID='".$ref['ParentReferenceID']."']");
+                                $ref['parentReferenceType'] = (string)$parent[0]['ReferenceType'];
+                                $ref['dbParentRef'] = $this->checkIfEntryExists('tx_nwcitavi_domain_model_reference', 'citavi_id', $ref['ParentReferenceID']);
+                                $ref['sortDate'] = $dbParentRef['sort_date'];
+                            }
+                            if(!empty($ref['@attributes']['ID'])) {
+                                $refStr = $this->generatedHash($ref);
+                                $hash = hash('md5', $refStr);
+                                $this->insertInHashTable( 'ReferenceHash', $hash, ($settings['sPid']) ?: '0');
+                                $columnExists = $this->columnExists('ReferenceRepository', $ref['@attributes']['ID'], 'tx_nwcitavi_domain_model_reference');
+                                $this->setDatabase($ref, 'Reference', $columnExists, $hash, $key, $uniqueId, $settings);
+                                // Locations speichern
+                                if($iValue['Locations']['Location']['@attributes']) {
+                                    $location = $array['References']['Reference'][$i]['Locations']['Location'];
+                                    if(!empty($location['@attributes']['ID'])) {
+                                        $locationStr = $this->generatedHash($location);
+                                        $hash = hash('md5', $locationStr);
+                                        $this->insertInHashTable( 'LocationHash', $hash, ($settings['sPid']) ?: '0');
+                                        $columnExists = $this->columnExists('LocationRepository', $location['@attributes']['ID'], 'tx_nwcitavi_domain_model_location');
+                                        $this->setDatabase($location, 'Location', $columnExists, $hash, $key, $uniqueId, $settings);
+                                        // Location verknüpfen
+                                        $this->updateReferenceLocation($ref, $location['@attributes']['ID']);
+                                        //Libraries verknüpfen
+                                        if(!empty($iValue['Locations']['Location']['LibraryID'])) {
+                                            $this->updateLocationLibrary($location['@attributes']['ID'], $iValue['Locations']['Location']['LibraryID']);
+                                        }
+                                    }
+                                    unset($location, $locationAttributes, $db_location, $locationUid);
+                                } else {
+                                    if ( is_array( $iValue['Locations']['Location'] ) ) {
+                                        $locationsCount = count($iValue['Locations']['Location']);
+                                        for($j = 0; $j < $locationsCount; $j++) {
+                                            $location = $array['References']['Reference'][$i]['Locations']['Location'][$j];
+                                            if(!empty($location['@attributes']['ID'])) {
+                                                $locationStr = $this->generatedHash($location);
+                                                $hash = hash('md5', $locationStr);
+                                                $this->insertInHashTable( 'LocationHash', $hash, ($settings['sPid']) ?: '0');
+                                                $columnExists = $this->columnExists('LocationRepository', $location['@attributes']['ID'], 'tx_nwcitavi_domain_model_location');
+                                                $this->setDatabase($location, 'Location', $columnExists, $hash, $key, $uniqueId, $settings);
+                                                // Location verknüpfen
+                                                $this->updateReferenceLocation($ref, $location['@attributes']['ID']);
+                                                //Libraries verknüpfen
+                                                if(!empty($iValue['Locations']['Location'][$j]['LibraryID'])) {
+                                                    $this->updateLocationLibrary($location['@attributes']['ID'], $iValue['Locations']['Location'][$j]['LibraryID']);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    unset($location, $locationAttributes, $db_location, $locationUid);
+                                }
+                            }
+                            unset($ref, $refAttributes, $db_ref, $refUid);
+                        }
+                        $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_reference', 'tx_nwcitavi_domain_model_referencehash', $settings);
+                        $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_keyword', 'tx_nwcitavi_domain_model_keywordhash', $settings);
+                        $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_library', 'tx_nwcitavi_domain_model_libraryhash', $settings);
+                        $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_periodical', 'tx_nwcitavi_domain_model_periodicalhash', $settings);
+                        $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_person', 'tx_nwcitavi_domain_model_personhash', $settings);
+                        $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_publisher', 'tx_nwcitavi_domain_model_publisherhash', $settings);
+                        $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_seriestitle', 'tx_nwcitavi_domain_model_seriestitlehash', $settings);
+                        $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_knowledgeitem', 'tx_nwcitavi_domain_model_knowledgeitemhash', $settings);
+                    }
+                } catch (Exception $e) {
+                    $this->logRepository->addLog(1, 'References could not be generated. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                }
+                unlink($fileName);
+                $endTime = time();
+                file_put_contents($dir.'/log/upload.txt', date('d.m.Y H:i:s', $endTime).chr(13).chr(10), FILE_APPEND);
+                $to = $settings['email'];
+                $html = '<p>Der Scheduler wurde um '.date('H:i:s', $startTime).' Uhr gestartet und wurde für '.date('H:i:s', ($endTime - $startTime - 3600)).' Minuten ausgeführt. Beendet wurder der Scheduler um '.date('H:i:s', $endTime).' Uhr</p>';
+                $subject = $settings['subject'];
+                $plain = strip_tags($html);
+                $fromEmail = 'noreply@netzweber.de';
+                $fromName = 'Netzweber GmbH';
+                $replyToEmail = 'lutz.eckelmann@netzweber.de';
+                $replyToName = 'Netzweber GmbH';
+                $returnPath = '';
+                $this->sendMail($to, $subject, $html, $plain, $fromEmail, $fromName, $replyToEmail, $replyToName, $returnPath, $attachements = array());
+                $params['step'] = $step + 1;
+                $params['startTime'] = $startTime;
+                $params['uniqid'] = $uniqueId;
+                return $params;
+                break;
         }
-      }
     }
 
-    public function lastModification ( $dir, $todo = 'new', $format = 'd.m.Y H:i:s' ) {
-      if ( is_file ( $dir ) )
-        return false;
-
-      $lastfile = '';
-      if( strlen( $dir ) - 1 != '\\' || strlen( $dir ) - 1 != '/' )
-        $dir .= '/';
-
-      $handle = @opendir( $dir );
-
-      if( !$handle )
-        return false;
-
-      while ( ( $file = readdir( $handle ) ) !== false ) {
-        if( $file != '.' && $file != '..' && is_file ( $dir.$file ) ) {
-          if ( $todo == 'old' ) {
-            if( filemtime( $dir.$file ) <= filemtime( $dir.$lastfile ) ) {
-              $lastfile = $file;
-            }
-          } else {
-            if( filemtime( $dir.$file ) >= filemtime( $dir.$lastfile ) ) {
-              $lastfile = $file;
-            }
-          }
-          if ( empty( $lastfile ) )
-            $lastfile = $file;
+    /**
+     * Find last modified file in directory
+     *
+     * @param $dir
+     * @param string $todo
+     * @param string $format
+     * @return mixed
+     */
+    public function lastModification ( $dir, $todo = 'new', $format = 'd.m.Y H:i:s' )
+    {
+        if ( is_file ( $dir ) ) {
+            return false;
         }
-      }
-
-      $fileInfo['dir'] = $dir;
-      $fileInfo['file'] = $lastfile;
-      $fileInfo['time'] = filemtime( $dir.$lastfile );
-      $fileInfo['formattime'] = date( $format, filemtime( $dir.$lastfile ) );
-
-      closedir( $handle );
-
-      return $fileInfo;
+        $lastFile = '';
+        if( strlen( $dir ) - 1 !== '\\' || strlen( $dir ) - 1 !== '/' ) {
+            $dir .= '/';
+        }
+        $handle = @opendir( $dir );
+        if( !$handle ) {
+            return false;
+        }
+        while ( ( $file = readdir( $handle ) ) !== false ) {
+            if( $file !== '.' && $file !== '..' && is_file ( $dir.$file ) ) {
+                if ( $todo === 'old' ) {
+                    if( filemtime( $dir.$file ) <= filemtime( $dir.$lastFile ) ) {
+                        $lastFile = $file;
+                    }
+                } else if( filemtime( $dir.$file ) >= filemtime( $dir.$lastFile ) ) {
+                    $lastFile = $file;
+                }
+                if ( empty( $lastFile ) ) {
+                    $lastFile = $file;
+                }
+            }
+        }
+        $fileInfo['dir'] = $dir;
+        $fileInfo['file'] = $lastFile;
+        $fileInfo['time'] = filemtime( $dir.$lastFile );
+        $fileInfo['formattime'] = date( $format, filemtime( $dir.$lastFile ) );
+        closedir( $handle );
+        return $fileInfo;
     }
 
-    public function getStatusCodeText($code = NULL, $extramsg = '', $errormsg = '') {
-      switch ($code) {
-        case 100: $msg['text'] = 'Continue'; break;
-        case 101: $msg['text'] = 'Switching Protocols'; break;
-        case 102: $msg['text'] = 'Processing'; break;
-        case 200: $msg['text'] = 'OK'; $msg['msg'] = 'All went fine.'; break;
-        case 201: $msg['text'] = 'Created'; break;
-        case 202: $msg['text'] = 'Accepted'; break;
-        case 203: $msg['text'] = 'Non-Authoritative Information'; break;
-        case 204: $msg['text'] = 'No Content'; break;
-        case 205: $msg['text'] = 'Reset Content'; break;
-        case 206: $msg['text'] = 'Partial Content'; break;
-        case 300: $msg['text'] = 'Multiple Choices'; break;
-        case 301: $msg['text'] = 'Moved Permanently'; break;
-        case 302: $msg['text'] = 'Moved Temporarily'; break;
-        case 303: $msg['text'] = 'See Other'; break;
-        case 304: $msg['text'] = 'Not Modified'; break;
-        case 305: $msg['text'] = 'Use Proxy'; break;
-        case 400: $msg['text'] = 'Bad Request'; break;
-        case 401: $msg['text'] = 'Unauthorized'; break;
-        case 402: $msg['text'] = 'Payment Required'; break;
-        case 403: $msg['text'] = 'Forbidden'; break;
-        case 404: $msg['text'] = 'Not Found'; break;
-        case 405: $msg['text'] = 'Method Not Allowed'; break;
-        case 406: $msg['text'] = 'Not Acceptable'; break;
-        case 407: $msg['text'] = 'Proxy Authentication Required'; break;
-        case 408: $msg['text'] = 'Request Time-out'; break;
-        case 409: $msg['text'] = 'Conflict'; break;
-        case 410: $msg['text'] = 'Gone'; break;
-        case 411: $msg['text'] = 'Length Required'; break;
-        case 412: $msg['text'] = 'Precondition Failed'; break;
-        case 413: $msg['text'] = 'Request Entity Too Large'; break;
-        case 414: $msg['text'] = 'Request-URI Too Large'; break;
-        case 415: $msg['text'] = 'Unsupported Media Type'; break;
-        case 417: $msg['text'] = 'Expectation Failed'; $msg['msg'] = 'No import_key-parameter set or import_key was invalid'; break;
-        case 418: $msg['text'] = 'Not Found'; $msg['msg'] = 'The Zip-Archiv could not be found'; break;
-        case 419: $msg['text'] = 'Expectation Failed'; $msg['msg'] = 'No file to upload or file was invalid'; break;
-        case 432: $msg['text'] = 'Wrong write permission'; $msg['msg'] = 'Missing write permission for the file directory'; break;
-        case 433: $msg['text'] = 'Missing parameter'; $msg['msg'] = 'The parameter func is missing'; break;
-        case 434: $msg['text'] = 'Database error'; $msg['msg'] = 'Unabled to write to database '.$extramsg.'. Error: '.$errormsg; break;
-        case 435: $msg['text'] = 'Function not available'; $msg['msg'] = 'The function is not implement at the moment'; break;
-        case 500: $msg['text'] = 'Internal Server Error'; break;
-        case 501: $msg['text'] = 'Not Implemented'; break;
-        case 502: $msg['text'] = 'Bad Gateway'; break;
-        case 503: $msg['text'] = 'Service Unavailable'; break;
-        case 504: $msg['text'] = 'Gateway Time-out'; break;
-        case 505: $msg['text'] = 'HTTP Version not supported'; break;
-        case 506: $msg['text'] = 'Export busy'; $msg['msg'] = 'Currently, the export is busy, please try again later.'; break;
-        case 999: $msg['text'] = 'Test'; $msg['msg'] = var_dump($_POST); t3lib_div::devLog('Citavi', 'nw_citavilist', -1, $_POST); break;
-        default:
-          $msg['text'] = 'Unknown http status code "' . htmlentities($code) . '"';
-      }
-
-      return $msg;
-    }
-
-    public function getStatusCode($code = NULL, $extramsg = '', $errormsg = '') {
-      if ($code !== NULL) {
+    /**
+     * Return the message to the passed status code
+     *
+     * @param null $code
+     * @param string $extraMsg
+     * @param string $errorMsg
+     * @return mixed
+     */
+    public function getStatusCodeText($code = NULL, $extraMsg = '', $errorMsg = '') {
         switch ($code) {
-          case 100: $text = 'Continue'; break;
-          case 101: $text = 'Switching Protocols'; break;
-          case 102: $text = 'Processing'; break;
-          case 200: $text = 'OK'; $msg = 'All went fine.'; break;
-          case 201: $text = 'Created'; break;
-          case 202: $text = 'Accepted'; break;
-          case 203: $text = 'Non-Authoritative Information'; break;
-          case 204: $text = 'No Content'; break;
-          case 205: $text = 'Reset Content'; break;
-          case 206: $text = 'Partial Content'; break;
-          case 300: $text = 'Multiple Choices'; break;
-          case 301: $text = 'Moved Permanently'; break;
-          case 302: $text = 'Moved Temporarily'; break;
-          case 303: $text = 'See Other'; break;
-          case 304: $text = 'Not Modified'; break;
-          case 305: $text = 'Use Proxy'; break;
-          case 400: $text = 'Bad Request'; break;
-          case 401: $text = 'Unauthorized'; break;
-          case 402: $text = 'Payment Required'; break;
-          case 403: $text = 'Forbidden'; break;
-          case 404: $text = 'Not Found'; break;
-          case 405: $text = 'Method Not Allowed'; break;
-          case 406: $text = 'Not Acceptable'; break;
-          case 407: $text = 'Proxy Authentication Required'; break;
-          case 408: $text = 'Request Time-out'; break;
-          case 409: $text = 'Conflict'; break;
-          case 410: $text = 'Gone'; break;
-          case 411: $text = 'Length Required'; break;
-          case 412: $text = 'Precondition Failed'; break;
-          case 413: $text = 'Request Entity Too Large'; break;
-          case 414: $text = 'Request-URI Too Large'; break;
-          case 415: $text = 'Unsupported Media Type'; break;
-          case 417: $text = 'Expectation Failed'; $msg = 'No import_key-parameter set or import_key was invalid'; break;
-          case 418: $text = 'Not Found'; $msg = 'The Zip-Archiv could not be found'; break;
-          case 419: $text = 'Expectation Failed'; $msg = 'No file to upload or file was invalid'; break;
-          case 432: $text = 'Wrong write permission'; $msg = 'Missing write permission for the file directory'; break;
-          case 433: $text = 'Missing parameter'; $msg = 'The parameter func is missing'; break;
-          case 434: $text = 'Database error'; $msg = 'Unabled to write to database '.$extramsg.'. Error: '.$errormsg; break;
-          case 435: $text = 'Function not available'; $msg = 'The function is not implement at the moment'; break;
-          case 500: $text = 'Internal Server Error'; break;
-          case 501: $text = 'Not Implemented'; break;
-          case 502: $text = 'Bad Gateway'; break;
-          case 503: $text = 'Service Unavailable'; break;
-          case 504: $text = 'Gateway Time-out'; break;
-          case 505: $text = 'HTTP Version not supported'; break;
-          case 506: $text = 'Export busy'; $msg = 'Currently, the export is busy, please try again later.'; break;
-          case 999: $text = 'Test'; $msg = var_dump($_POST); t3lib_div::devLog('Citavi', 'nw_citavilist', -1, $_POST); break;
-          default:
-              exit('Unknown http status code "' . htmlentities($code) . '"');
-          break;
+            case 100: $msg['text'] = 'Continue'; break;
+            case 101: $msg['text'] = 'Switching Protocols'; break;
+            case 102: $msg['text'] = 'Processing'; break;
+            case 200: $msg['text'] = 'OK'; $msg['msg'] = 'All went fine.'; break;
+            case 201: $msg['text'] = 'Created'; break;
+            case 202: $msg['text'] = 'Accepted'; break;
+            case 203: $msg['text'] = 'Non-Authoritative Information'; break;
+            case 204: $msg['text'] = 'No Content'; break;
+            case 205: $msg['text'] = 'Reset Content'; break;
+            case 206: $msg['text'] = 'Partial Content'; break;
+            case 300: $msg['text'] = 'Multiple Choices'; break;
+            case 301: $msg['text'] = 'Moved Permanently'; break;
+            case 302: $msg['text'] = 'Moved Temporarily'; break;
+            case 303: $msg['text'] = 'See Other'; break;
+            case 304: $msg['text'] = 'Not Modified'; break;
+            case 305: $msg['text'] = 'Use Proxy'; break;
+            case 400: $msg['text'] = 'Bad Request'; break;
+            case 401: $msg['text'] = 'Unauthorized'; break;
+            case 402: $msg['text'] = 'Payment Required'; break;
+            case 403: $msg['text'] = 'Forbidden'; break;
+            case 404: $msg['text'] = 'Not Found'; break;
+            case 405: $msg['text'] = 'Method Not Allowed'; break;
+            case 406: $msg['text'] = 'Not Acceptable'; break;
+            case 407: $msg['text'] = 'Proxy Authentication Required'; break;
+            case 408: $msg['text'] = 'Request Time-out'; break;
+            case 409: $msg['text'] = 'Conflict'; break;
+            case 410: $msg['text'] = 'Gone'; break;
+            case 411: $msg['text'] = 'Length Required'; break;
+            case 412: $msg['text'] = 'Precondition Failed'; break;
+            case 413: $msg['text'] = 'Request Entity Too Large'; break;
+            case 414: $msg['text'] = 'Request-URI Too Large'; break;
+            case 415: $msg['text'] = 'Unsupported Media Type'; break;
+            case 417: $msg['text'] = 'Expectation Failed'; $msg['msg'] = 'No import_key-parameter set or import_key was invalid'; break;
+            case 418: $msg['text'] = 'Not Found'; $msg['msg'] = 'The Zip-Archiv could not be found'; break;
+            case 419: $msg['text'] = 'Expectation Failed'; $msg['msg'] = 'No file to upload or file was invalid'; break;
+            case 432: $msg['text'] = 'Wrong write permission'; $msg['msg'] = 'Missing write permission for the file directory'; break;
+            case 433: $msg['text'] = 'Missing parameter'; $msg['msg'] = 'The parameter func is missing'; break;
+            case 434: $msg['text'] = 'Database error'; $msg['msg'] = 'Unabled to write to database '.$extraMsg.'. Error: '.$errorMsg; break;
+            case 435: $msg['text'] = 'Function not available'; $msg['msg'] = 'The function is not implement at the moment'; break;
+            case 500: $msg['text'] = 'Internal Server Error'; break;
+            case 501: $msg['text'] = 'Not Implemented'; break;
+            case 502: $msg['text'] = 'Bad Gateway'; break;
+            case 503: $msg['text'] = 'Service Unavailable'; break;
+            case 504: $msg['text'] = 'Gateway Time-out'; break;
+            case 505: $msg['text'] = 'HTTP Version not supported'; break;
+            case 506: $msg['text'] = 'Export busy'; $msg['msg'] = 'Currently, the export is busy, please try again later.'; break;
+            case 999: $msg['text'] = 'Test'; $msg['msg'] = var_dump($_POST); break;
+            default: $msg['text'] = 'Unknown http status code "' . htmlentities($code) . '"';
         }
+        return $msg;
+    }
 
-        $protocol = (isset($_SERVER['SERVER_PROTOCOL']) ? $_SERVER['SERVER_PROTOCOL'] : 'HTTP/1.0');
-
-        header($protocol . ' ' . $code . ' ' . $text);
-        echo $msg;
-        $GLOBALS['http_response_code'] = $code;
-
+    /**
+     * Return the title to the passed status code
+     *
+     * @param null $code
+     * @param string $extraMsg
+     * @param string $errorMsg
+     * @return int|mixed|null
+     */
+    public function getStatusCode($code = NULL, $extraMsg = '', $errorMsg = '') {
+        if ($code !== NULL) {
+            $msg = '';
+            switch ($code) {
+            	case 100: $text = 'Continue'; break;
+            	case 101: $text = 'Switching Protocols'; break;
+            	case 102: $text = 'Processing'; break;
+            	case 200: $text = 'OK'; $msg = 'All went fine.'; break;
+            	case 201: $text = 'Created'; break;
+            	case 202: $text = 'Accepted'; break;
+            	case 203: $text = 'Non-Authoritative Information'; break;
+            	case 204: $text = 'No Content'; break;
+            	case 205: $text = 'Reset Content'; break;
+            	case 206: $text = 'Partial Content'; break;
+            	case 300: $text = 'Multiple Choices'; break;
+            	case 301: $text = 'Moved Permanently'; break;
+            	case 302: $text = 'Moved Temporarily'; break;
+            	case 303: $text = 'See Other'; break;
+            	case 304: $text = 'Not Modified'; break;
+            	case 305: $text = 'Use Proxy'; break;
+            	case 400: $text = 'Bad Request'; break;
+            	case 401: $text = 'Unauthorized'; break;
+            	case 402: $text = 'Payment Required'; break;
+            	case 403: $text = 'Forbidden'; break;
+            	case 404: $text = 'Not Found'; break;
+            	case 405: $text = 'Method Not Allowed'; break;
+            	case 406: $text = 'Not Acceptable'; break;
+            	case 407: $text = 'Proxy Authentication Required'; break;
+            	case 408: $text = 'Request Time-out'; break;
+            	case 409: $text = 'Conflict'; break;
+            	case 410: $text = 'Gone'; break;
+            	case 411: $text = 'Length Required'; break;
+            	case 412: $text = 'Precondition Failed'; break;
+            	case 413: $text = 'Request Entity Too Large'; break;
+            	case 414: $text = 'Request-URI Too Large'; break;
+            	case 415: $text = 'Unsupported Media Type'; break;
+            	case 417: $text = 'Expectation Failed'; $msg = 'No import_key-parameter set or import_key was invalid'; break;
+            	case 418: $text = 'Not Found'; $msg = 'The Zip-Archiv could not be found'; break;
+            	case 419: $text = 'Expectation Failed'; $msg = 'No file to upload or file was invalid'; break;
+            	case 432: $text = 'Wrong write permission'; $msg = 'Missing write permission for the file directory'; break;
+            	case 433: $text = 'Missing parameter'; $msg = 'The parameter func is missing'; break;
+            	case 434: $text = 'Database error'; $msg = 'Unabled to write to database '.$extraMsg.'. Error: '.$errorMsg; break;
+            	case 435: $text = 'Function not available'; $msg = 'The function is not implement at the moment'; break;
+            	case 500: $text = 'Internal Server Error'; break;
+            	case 501: $text = 'Not Implemented'; break;
+            	case 502: $text = 'Bad Gateway'; break;
+            	case 503: $text = 'Service Unavailable'; break;
+            	case 504: $text = 'Gateway Time-out'; break;
+            	case 505: $text = 'HTTP Version not supported'; break;
+            	case 506: $text = 'Export busy'; $msg = 'Currently, the export is busy, please try again later.'; break;
+            	case 999: $text = 'Test'; $msg = var_dump($_POST); break;
+            	default: exit('Unknown http status code "' . htmlentities($code) . '"'); break;
+            }
+            $protocol = (isset($_SERVER['SERVER_PROTOCOL']) ? $_SERVER['SERVER_PROTOCOL'] : 'HTTP/1.0');
+            header($protocol . ' ' . $code . ' ' . $text);
+            echo $msg;
+            $GLOBALS['http_response_code'] = $code;
       } else {
         $code = (isset($GLOBALS['http_response_code']) ? $GLOBALS['http_response_code'] : 200);
       }
-
       return $code;
     }
 
-    function initTSFE($id = 1, $typeNum = 0) {
-      \TYPO3\CMS\Frontend\Utility\EidUtility::initTCA();
-      if (!is_object($GLOBALS['TT'])) {
-        $GLOBALS['TT'] = new \TYPO3\CMS\Core\TimeTracker\NullTimeTracker;
-        $GLOBALS['TT']->start();
-      }
-      $GLOBALS['TSFE'] = GeneralUtility::makeInstance('TYPO3\\CMS\\Frontend\\Controller\\TypoScriptFrontendController',  $GLOBALS['TYPO3_CONF_VARS'], $id, $typeNum);
-      $GLOBALS['TSFE']->connectToDB();
-      $GLOBALS['TSFE']->initFEuser();
-      $GLOBALS['TSFE']->determineId();
-      $GLOBALS['TSFE']->initTemplate();
-      $GLOBALS['TSFE']->getConfigArray();
+    /**
+     * Initializes the $GLOBALS['TSFE']
+     *
+     * @param int $id
+     * @param int $typeNum
+     */
+    public function initTSFE($id = 1, $typeNum = 0): void
+    {
+        $GLOBALS['TSFE'] = GeneralUtility::makeInstance(TypoScriptFrontendController::class,  $GLOBALS['TYPO3_CONF_VARS'], $id, $typeNum);
+        $GLOBALS['TSFE']->connectToDB();
+        $GLOBALS['TSFE']->initFEuser();
+        $GLOBALS['TSFE']->determineId();
+        $GLOBALS['TSFE']->initTemplate();
+        $GLOBALS['TSFE']->getConfigArray();
     }
 
-    public function truncateDatabase($table) {
-      $GLOBALS['TYPO3_DB']->exec_TRUNCATEquery($table);
+    /**
+     * Clears the database table that is passed
+     *
+     * @param $table
+     */
+    public function truncateDatabase($table): void
+    {
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable($table);
+        $queryBuilder->truncate($table);
     }
 
+    /**
+     * Generates a unique hash
+     */
     public function generatedHash($ref) {
-      foreach($ref as $key => $value) {
-        if(is_array($value)) {
-          $hash .= $this->generatedHash($value);
-        } else {
-          $hash .= $value;
+        $hash = null;
+        foreach($ref as $key => $value) {
+            if(is_array($value)) {
+                $hash .= $this->generatedHash($value);
+            } else {
+                $hash .= $value;
+            }
         }
-      }
-
-      return $hash;
+        return $hash;
     }
 
-    public function insertInHashTable($repo, $model, $hash, $pid) {
-      $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('tx_nwcitavi_domain_model_'.strtolower($model));
-      $queryBuilder->insert('tx_nwcitavi_domain_model_'.strtolower($model));
-      $queryBuilder->values([
+    /**
+     * Insert current hash values in the passed model
+     *
+     * @param $repo
+     * @param $model
+     * @param $hash
+     * @param $pid
+     */
+    public function insertInHashTable($model, $hash, $pid): void
+    {
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('tx_nwcitavi_domain_model_'.strtolower($model));
+        $queryBuilder->insert('tx_nwcitavi_domain_model_'.strtolower($model));
+        $queryBuilder->values([
             'citavi_hash' => $hash,
             'crdate' => time(),
             'pid' => $pid,
         ]);
-      $res = $queryBuilder->execute();
+        $queryBuilder->execute();
     }
 
+    /**
+     * Check if a column with the passed Citavi ID already exists
+     *
+     * @param $repo
+     * @param $citaviId
+     * @param $table
+     * @return |null
+     */
     public function columnExists($repo, $citaviId, $table) {
-      $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-      switch($repo) {
-        case 'CategoryRepository':
-          $repository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\CategoryRepository');
-          break;
-        default:
-          $repository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\'.$repo);
-      }
-      $res = $repository->findByCitaviId($citaviId, $table);
-      $i = 0;
-      foreach($res as $obj) {
-        if($i == 0) {
-          $result = $obj;
-          $i++;
+        $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
+        $repository = null;
+        $result = null;
+        if($repo === 'CategoryRepository') {
+            $repository = $objectManager->get(CategoryRepository::class);
+        } else {
+            $repository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\'.$repo);
         }
-      }
-
-      return $result;
+        $res = $repository->findByCitaviId($citaviId, $table);
+        $i = 0;
+        foreach($res as $obj) {
+            if($i === 0) {
+                $result = $obj;
+                $i++;
+            }
+        }
+        return $result;
     }
 
-    public function deletedDatabaseColumns($t1, $t2, $settings) {
-      if($t1 == 'tx_nwcitavi_domain_model_category') {
-        $GLOBALS['TYPO3_DB']->sql_query('DELETE r FROM '.$t1.' r LEFT JOIN '.$t2.' rh ON r.citavi_hash = rh.citavi_hash WHERE rh.citavi_hash IS NULL AND r.pid = '.$settings['sPid']);
-      } else {
-        $GLOBALS['TYPO3_DB']->sql_query('DELETE r FROM '.$t1.' r LEFT JOIN '.$t2.' rh ON r.citavi_hash = rh.citavi_hash WHERE rh.citavi_hash IS NULL');
-      }
+    /**
+     * Delete all items wish no longer have a hash
+     *
+     * @param $t1
+     * @param $t2
+     * @param $settings
+     */
+    public function deletedDatabaseColumns($t1, $t2, $settings): void
+    {
+        $query = $this->createQuery();
+        if($t1 === 'tx_nwcitavi_domain_model_category') {
+            $query->statement('DELETE r FROM '.$t1.' r LEFT JOIN '.$t2.' rh ON r.citavi_hash = rh.citavi_hash WHERE rh.citavi_hash IS NULL AND r.pid = '.$settings['sPid']);
+        } else {
+            $query->statement('DELETE r FROM '.$t1.' r LEFT JOIN '.$t2.' rh ON r.citavi_hash = rh.citavi_hash WHERE rh.citavi_hash IS NULL');
+        }
     }
 
-    public function setDatabase($ref, $modelTitle, $columnExists, $settings = null, $parent = null) {
-      $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-      switch($modelTitle) {
-        case 'Reference':
-          try {
-            $repository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\ReferenceRepository');
-            if($columnExists) {
-              $newReference = $columnExists;
-            } else {
-              $newReference = new \Netzweber\NwCitavi\Domain\Model\Reference();
-            }
-            $newReference->setPid(($settings['sPid']) ? $settings['sPid'] : '0');
-            $newReference->setCitaviHash($this->hash);
-            $newReference->setCitaviId(($ref['@attributes']['ID']) ? $ref['@attributes']['ID'] : '0');
-            $newReference->setReferenceType(($ref['@attributes']['ReferenceType']) ? $ref['@attributes']['ReferenceType'] : '');
-            $newReference->setParentReferenceType(($this->parentReferenceType) ? $this->parentReferenceType : '');
-            $newReference->setCreatedBy(($ref['@attributes']['CreatedBy']) ? $ref['@attributes']['CreatedBy'] : '0');
-            $newReference->setCreatedBySid(($ref['@attributes']['CreatedBySid']) ? $ref['@attributes']['CreatedBySid'] : '0');
-            try {
-              $createdOn = new \DateTime(($ref['@attributes']['CreatedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['CreatedOn']) : '1000-01-01 00:00:00');
-              $newReference->setCreatedOn(($createdOn->getTimestamp()) ? $createdOn->getTimestamp() : 0);
-            } catch (Exception $e) {
-              $this->logRepository->addLog(1, 'DateTime [CreatedOn] "'.$ref['@attributes']['CreatedOn'].'" could not be parsed for Reference '.$ref['@attributes']['ID'].'. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-            }
-            $newReference->setISBN(($ref['@attributes']['ISBN']) ? $ref['@attributes']['ISBN'] : '');
-            $newReference->setModifiedBy(($ref['@attributes']['ModifiedBy']) ? $ref['@attributes']['ModifiedBy'] : '0');
-            $newReference->setModifiedBySid(($ref['@attributes']['ModifiedBySid']) ? $ref['@attributes']['ModifiedBySid'] : '0');
-            try {
-              $modifiedOn = new \DateTime(($ref['@attributes']['ModifiedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['ModifiedOn']) : '1000-01-01 00:00:00');
-              $newReference->setModifiedOn(($modifiedOn->getTimestamp()) ? $modifiedOn->getTimestamp() : 0);
-            } catch (Exception $e) {
-              $this->logRepository->addLog(1, 'DateTime [ModifiedOn] "'.$ref['@attributes']['ModifiedOn'].'" could not be parsed for Reference '.$ref['@attributes']['ID'].'. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-            }
-            $newReference->setSequenceNumber(($ref['@attributes']['SequenceNumber']) ? $ref['@attributes']['SequenceNumber'] : '0');
-            $newReference->setAbstract(($ref['Abstract']) ? $ref['Abstract'] : '');
-            $newReference->setAbstractRTF(($ref['AbstractRTF']) ? $ref['AbstractRTF'] : '');
-            if($ref['AccessDate']) {
-              try {
-                /*$accessDate = new \DateTime(($ref['AccessDate']) ? $this->setDatetimeByCitaviDate($ref['AccessDate']) : '1000-01-01 00:00:00');
-                $newReference->setAccessDate(($accessDate->getTimestamp()) ? $accessDate->getTimestamp() : 0);*/
-                $newReference->setAccessDate($ref['AccessDate']);
-              } catch (Exception $e) {
-                $this->logRepository->addLog(1, 'DateTime [AccessDate] "'.$ref['AccessDate'].'" could not be parsed for Reference '.$ref['@attributes']['ID'].'. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-              }
-            }
-            $newReference->setAdditions(($ref['Additions']) ? $ref['Additions'] : '');
-            $newReference->setRefAuthors(($ref['Authors']) ? $ref['Authors'] : '');
-            if($ref['Authors'] != '') {
-              $authors = $this->getRelatedObjectStorage($ref['Authors'], 'citavi_id', 'tx_nwcitavi_domain_model_person', 'PersonRepository');
-              if($authors) {
-                $newReference->setAuthors($authors);
-              }
-            }
-            $newReference->setRefCategories(($ref['Categories']) ? $ref['Categories'] : '');
-            if($ref['Categories'] != '') {
-              $categories = $this->getRelatedCategories($ref['Categories']);
-              if($categories) {
-                $newReference->setCategories($categories);
-              }
-            }
-            $newReference->setCitationKeyUpdateType(($ref['CitationKeyUpdateType']) ? $ref['CitationKeyUpdateType'] : '');
-            $newReference->setRefCollaborators(($ref['Collaborators']) ? $ref['Collaborators'] : '');
-            if($ref['Collaborators'] != '') {
-              $collaborators = $this->getRelatedObjectStorage($ref['Collaborators'], 'citavi_id', 'tx_nwcitavi_domain_model_person', 'PersonRepository');
-              if($collaborators) {
-                $newReference->setCollaborators($collaborators);
-              }
-            }
-            $newReference->setCustomField1(($ref['CustomField1']) ? $ref['CustomField1'] : '');
-            $newReference->setCustomField2(($ref['CustomField2']) ? $ref['CustomField2'] : '');
-            $newReference->setCustomField3(($ref['CustomField3']) ? $ref['CustomField3'] : '');
-            $newReference->setCustomField4(($ref['CustomField4']) ? $ref['CustomField4'] : '');
-            $newReference->setCustomField5(($ref['CustomField5']) ? $ref['CustomField5'] : '');
-            $newReference->setCustomField6(($ref['CustomField6']) ? $ref['CustomField6'] : '');
-            $newReference->setCustomField7(($ref['CustomField7']) ? $ref['CustomField7'] : '');
-            $newReference->setCustomField8(($ref['CustomField8']) ? $ref['CustomField8'] : '');
-            $newReference->setCustomField9(($ref['CustomField9']) ? $ref['CustomField9'] : '');
-            $newReference->setBookDate(($ref['Date']) ? $ref['Date'] : '');
-            $newReference->setDefaultLocationID(($ref['DefaultLocationID']) ? $ref['DefaultLocationID'] : '');
-            $newReference->setEdition(($ref['Edition']) ? $ref['Edition'] : '');
-            $newReference->setRefEditors(($ref['Editors']) ? $ref['Editors'] : '');
-            if($ref['Editors'] != '') {
-              $editors = $this->getRelatedObjectStorage($ref['Editors'], 'citavi_id', 'tx_nwcitavi_domain_model_person', 'PersonRepository');
-              if($editors) {
-                $newReference->setEditors($editors);
-              }
-            }
-            $newReference->setEvaluation(($ref['Evaluation']) ? $ref['Evaluation'] : '');
-            $newReference->setEvaluationRTF(($ref['EvaluationRTF']) ? $ref['EvaluationRTF'] : '');
-            $newReference->setRefKeywords(($ref['Keywords']) ? $ref['Keywords'] : '');
-            if($ref['Keywords'] != '') {
-              $keywords = $this->getRelatedObjectStorage($ref['Keywords'], 'citavi_id', 'tx_nwcitavi_domain_model_keyword', 'KeywordRepository');
-              if($keywords) {
-                $newReference->setKeywords($keywords);
-              }
-            }
-            $newReference->setBookLanguage(($ref['Language']) ? $ref['Language'] : '');
-            $newReference->setBookNote(($ref['Notes']) ? $ref['Notes'] : '');
-            $newReference->setNumber(($ref['Number']) ? $ref['Number'] : '');
-            $newReference->setNumberOfVolumes(($ref['NumberOfVolumes']) ? $ref['NumberOfVolumes'] : '');
-            $newReference->setOnlineAddress(($ref['OnlineAddress']) ? $ref['OnlineAddress'] : '');
-            $newReference->setRefOrganizations(($ref['Organizations']) ? $ref['Organizations'] : '');
-            if($ref['Organizations'] != '') {
-              $organizations = $this->getRelatedObjectStorage($ref['Organizations'], 'citavi_id', 'tx_nwcitavi_domain_model_person', 'PersonRepository');
-              if($organizations) {
-                $newReference->setOrganizations($organizations);
-              }
-            }
-            $newReference->setOriginalCheckedBy(($ref['OriginalCheckedBy']) ? $ref['OriginalCheckedBy'] : '');
-            $newReference->setOriginalPublication(($ref['OriginalPublication']) ? $ref['OriginalPublication'] : '');
-            $newReference->setRefOthersInvolved(($ref['OthersInvolved']) ? $ref['OthersInvolved'] : '');
-            if($ref['OthersInvolved'] != '') {
-              $othersInvolved = $this->getRelatedObjectStorage($ref['OthersInvolved'], 'citavi_id', 'tx_nwcitavi_domain_model_person', 'PersonRepository');
-              if($othersInvolved) {
-                $newReference->setOthersInvolved($othersInvolved);
-              }
-            }
-            $newReference->setPageCount(($ref['PageCount']) ? $ref['PageCount'] : '');
-            $newReference->setPageRange($ref['PageRange']['@attributes']['StartPage'].';'.$ref['PageRange']['@attributes']['EndPage']);
-            $newReference->setParallelTitle(($ref['ParallelTitle']) ? $ref['ParallelTitle'] : '');
-            $newReference->setRefPeriodical(($ref['PeriodicalID']) ? $ref['PeriodicalID'] : '');
-            if($ref['PeriodicalID'] != '') {
-              $periodicals = $this->getRelatedObjectStorage($ref['PeriodicalID'], 'citavi_id', 'tx_nwcitavi_domain_model_periodical', 'PeriodicalRepository');
-              if($periodicals) {
-                $newReference->setPeriodicals($periodicals);
-              }
-            }
-            $newReference->setPlaceOfPublication(($ref['PlaceOfPublication']) ? $ref['PlaceOfPublication'] : '');
-            $newReference->setPrice(($ref['Price']) ? floatval($ref['Price']) : 0);
-            $newReference->setRefPublishers(($ref['Publishers']) ? $ref['Publishers'] : '');
-            if($ref['Publishers'] != '') {
-              $publishers = $this->getRelatedObjectStorage($ref['Publishers'], 'citavi_id', 'tx_nwcitavi_domain_model_publisher', 'PublisherRepository');
-              if($publishers) {
-                $newReference->setPublishers($publishers);
-              }
-            }
-            $newReference->setRating(($ref['Rating']) ? intval($ref['Rating']) : 0);
-            $newReference->setRefSeriesTitle(($ref['SeriesTitleID']) ? $ref['SeriesTitleID'] : '');
-            if($ref['SeriesTitleID'] != '') {
-              $seriestitles = $this->getRelatedObjectStorage($ref['SeriesTitleID'], 'citavi_id', 'tx_nwcitavi_domain_model_seriestitle', 'SeriestitleRepository');
-              if($seriestitles) {
-                $newReference->setSeriestitles($seriestitles);
-              }
-            }
-            $newReference->setShortTitle(($ref['ShortTitle']) ? $ref['ShortTitle'] : '');
-            $newReference->setSourceOfBibliographicInformation(($ref['SourceOfBibliographicInformation']) ? $ref['SourceOfBibliographicInformation'] : '');
-            $newReference->setSpecificField1(($ref['SpecificField1']) ? $ref['SpecificField1'] : '');
-            $newReference->setSpecificField2(($ref['SpecificField2']) ? $ref['SpecificField2'] : '');
-            $newReference->setSpecificField4(($ref['SpecificField4']) ? $ref['SpecificField4'] : '');
-            $newReference->setSpecificField7(($ref['SpecificField7']) ? $ref['SpecificField7'] : '');
-            $newReference->setStorageMedium(($ref['StorageMedium']) ? $ref['StorageMedium'] : '');
-            $newReference->setSubtitle(($ref['Subtitle']) ? $ref['Subtitle'] : '');
-            $newReference->setTableOfContents(($ref['TableOfContents']) ? $ref['TableOfContents'] : '');
-            $newReference->setTableOfContentsRTF(($ref['TableOfContentsRTF']) ? $ref['TableOfContentsRTF'] : '');
-            $newReference->setTitle(($ref['Title']) ? $ref['Title'] : '');
-            $newReference->setTitleInOtherLanguages(($ref['TitleInOtherLanguages']) ? $ref['TitleInOtherLanguages'] : '');
-            $newReference->setTitleSupplement(($ref['TitleSupplement']) ? $ref['TitleSupplement'] : '');
-            $newReference->setTranslatedTitle(($ref['TranslatedTitle']) ? $ref['TranslatedTitle'] : '');
-            $newReference->setUniformTitle(($ref['UniformTitle']) ? $ref['UniformTitle'] : '');
-            $newReference->setBookVolume(($ref['Volume']) ? $ref['Volume'] : '');
-            $newReference->setBookYear(($ref['Year']) ? $ref['Year'] : '');
-            $newReference->setLiteraturlistId($this->key);
-            $newReference->setPageRangeStart(($ref['PageRange']['@attributes']['StartPage']) ? $ref['PageRange']['@attributes']['StartPage'] : '');
-            $newReference->setPageRangeEnd(($ref['PageRange']['@attributes']['EndPage']) ? $ref['PageRange']['@attributes']['EndPage'] : '');
-            $newReference->setDoi(($ref['@attributes']['Doi']) ? $ref['@attributes']['Doi'] : '0');
-            $sortDateParts = explode(".", $this->sortDate);
-            if(count($sortDateParts)>1) {
-              foreach($sortDateParts as $part) {
-                if(strlen($part)==4) {
-                  $this->sortDate = $part;
+    /**
+     * Writes the data of the xml file into the database
+     *
+     * @param $ref
+     * @param $modelTitle
+     * @param $columnExists
+     * @param $hash
+     * @param $key
+     * @param $uniqueId
+     * @param null $settings
+     * @param null $parent
+     * @throws \Exception
+     */
+    public function setDatabase($ref, $modelTitle, $columnExists, $hash, $key, $uniqueId, $settings = null, $parent = null): void
+    {
+        $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
+        switch($modelTitle) {
+            case 'Reference':
+                try {
+                    $repository = $objectManager->get(__CLASS__);
+                    if($columnExists) {
+                        $newReference = $columnExists;
+                    } else {
+                        $newReference = new Reference();
+                    }
+                    $newReference->setPid(($settings['sPid']) ?: '0');
+                    $newReference->setCitaviHash($hash);
+                    $newReference->setCitaviId(($ref['@attributes']['ID']) ?: '0');
+                    $newReference->setReferenceType(($ref['@attributes']['ReferenceType']) ?: '');
+                    $newReference->setParentReferenceType(($ref['parentReferenceType']) ?: '');
+                    $newReference->setCreatedBy(($ref['@attributes']['CreatedBy']) ?: '0');
+                    $newReference->setCreatedBySid(($ref['@attributes']['CreatedBySid']) ?: '0');
+                    try {
+                        $createdOn = new \DateTime(($ref['@attributes']['CreatedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['CreatedOn']) : '1000-01-01 00:00:00');
+                        $newReference->setCreatedOn(($createdOn->getTimestamp()) ?: 0);
+                    } catch (Exception $e) {
+                        $this->logRepository->addLog(1, 'DateTime [CreatedOn] "'.$ref['@attributes']['CreatedOn'].'" could not be parsed for Reference '.$ref['@attributes']['ID'].'. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                    }
+                    $newReference->setISBN(($ref['@attributes']['ISBN']) ?: '');
+                    $newReference->setModifiedBy(($ref['@attributes']['ModifiedBy']) ?: '0');
+                    $newReference->setModifiedBySid(($ref['@attributes']['ModifiedBySid']) ?: '0');
+                    try {
+                        $modifiedOn = new \DateTime(($ref['@attributes']['ModifiedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['ModifiedOn']) : '1000-01-01 00:00:00');
+                        $newReference->setModifiedOn(($modifiedOn->getTimestamp()) ?: 0);
+                    } catch (Exception $e) {
+                        $this->logRepository->addLog(1, 'DateTime [ModifiedOn] "'.$ref['@attributes']['ModifiedOn'].'" could not be parsed for Reference '.$ref['@attributes']['ID'].'. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                    }
+                    $newReference->setSequenceNumber(($ref['@attributes']['SequenceNumber']) ?: '0');
+                    $newReference->setAbstract(($ref['Abstract']) ?: '');
+                    $newReference->setAbstractRTF(($ref['AbstractRTF']) ?: '');
+                    $newReference->setAccessDate(($ref['AccessDate']) ?: '');
+                    $newReference->setAdditions(($ref['Additions']) ?: '');
+                    $newReference->setRefAuthors(($ref['Authors']) ?: '');
+                    if(!empty($ref['Authors'])) {
+                        $authors = $this->getRelatedObjectStorage($ref['Authors'], 'citavi_id', 'tx_nwcitavi_domain_model_person', 'PersonRepository');
+                        if($authors) {
+                            $newReference->setAuthors($authors);
+                        }
+                    }
+                    $newReference->setRefCategories(($ref['Categories']) ?: '');
+                    if(!empty($ref['Categories'])) {
+                        $categories = $this->getRelatedCategories($ref['Categories']);
+                        if($categories) {
+                            $newReference->setCategories($categories);
+                        }
+                    }
+                    $newReference->setCitationKeyUpdateType(($ref['CitationKeyUpdateType']) ?: '');
+                    $newReference->setRefCollaborators(($ref['Collaborators']) ?: '');
+                    if(!empty($ref['Collaborators'])) {
+                        $collaborators = $this->getRelatedObjectStorage($ref['Collaborators'], 'citavi_id', 'tx_nwcitavi_domain_model_person', 'PersonRepository');
+                        if($collaborators) {
+                            $newReference->setCollaborators($collaborators);
+                        }
+                    }
+                    $newReference->setCustomField1(($ref['CustomField1']) ?: '');
+                    $newReference->setCustomField2(($ref['CustomField2']) ?: '');
+                    $newReference->setCustomField3(($ref['CustomField3']) ?: '');
+                    $newReference->setCustomField4(($ref['CustomField4']) ?: '');
+                    $newReference->setCustomField5(($ref['CustomField5']) ?: '');
+                    $newReference->setCustomField6(($ref['CustomField6']) ?: '');
+                    $newReference->setCustomField7(($ref['CustomField7']) ?: '');
+                    $newReference->setCustomField8(($ref['CustomField8']) ?: '');
+                    $newReference->setCustomField9(($ref['CustomField9']) ?: '');
+                    $newReference->setBookDate(($ref['Date']) ?: '');
+                    $newReference->setDefaultLocationID(($ref['DefaultLocationID']) ?: '');
+                    $newReference->setEdition(($ref['Edition']) ?: '');
+                    $newReference->setRefEditors(($ref['Editors']) ?: '');
+                    if(!empty($ref['Editors'])) {
+                        $editors = $this->getRelatedObjectStorage($ref['Editors'], 'citavi_id', 'tx_nwcitavi_domain_model_person', 'PersonRepository');
+                        if($editors) {
+                            $newReference->setEditors($editors);
+                        }
+                    }
+                    $newReference->setEvaluation(($ref['Evaluation']) ?: '');
+                    $newReference->setEvaluationRTF(($ref['EvaluationRTF']) ?: '');
+                    $newReference->setRefKeywords(($ref['Keywords']) ?: '');
+                    if(!empty($ref['Keywords'])) {
+                        $keywords = $this->getRelatedObjectStorage($ref['Keywords'], 'citavi_id', 'tx_nwcitavi_domain_model_keyword', 'KeywordRepository');
+                        if($keywords) {
+                            $newReference->setKeywords($keywords);
+                        }
+                    }
+                    $newReference->setBookLanguage(($ref['Language']) ?: '');
+                    $newReference->setBookNote(($ref['Notes']) ?: '');
+                    $newReference->setNumber(($ref['Number']) ?: '');
+                    $newReference->setNumberOfVolumes(($ref['NumberOfVolumes']) ?: '');
+                    $newReference->setOnlineAddress(($ref['OnlineAddress']) ?: '');
+                    $newReference->setRefOrganizations(($ref['Organizations']) ?: '');
+                    if(!empty($ref['Organizations'])) {
+                        $organizations = $this->getRelatedObjectStorage($ref['Organizations'], 'citavi_id', 'tx_nwcitavi_domain_model_person', 'PersonRepository');
+                        if($organizations) {
+                            $newReference->setOrganizations($organizations);
+                        }
+                    }
+                    $newReference->setOriginalCheckedBy(($ref['OriginalCheckedBy']) ?: '');
+                    $newReference->setOriginalPublication(($ref['OriginalPublication']) ?: '');
+                    $newReference->setRefOthersInvolved(($ref['OthersInvolved']) ?: '');
+                    if(!empty($ref['OthersInvolved'])) {
+                        $othersInvolved = $this->getRelatedObjectStorage($ref['OthersInvolved'], 'citavi_id', 'tx_nwcitavi_domain_model_person', 'PersonRepository');
+                        if($othersInvolved) {
+                            $newReference->setOthersInvolved($othersInvolved);
+                        }
+                    }
+                    $newReference->setPageCount(($ref['PageCount']) ?: '');
+                    $newReference->setPageRange($ref['PageRange']['@attributes']['StartPage'].';'.$ref['PageRange']['@attributes']['EndPage']);
+                    $newReference->setParallelTitle(($ref['ParallelTitle']) ?: '');
+                    $newReference->setRefPeriodical(($ref['PeriodicalID']) ?: '');
+                    if(!empty($ref['PeriodicalID'])) {
+                        $periodicals = $this->getRelatedObjectStorage($ref['PeriodicalID'], 'citavi_id', 'tx_nwcitavi_domain_model_periodical', 'PeriodicalRepository');
+                        if($periodicals) {
+                            $newReference->setPeriodicals($periodicals);
+                        }
+                    }
+                    $newReference->setPlaceOfPublication(($ref['PlaceOfPublication']) ?: '');
+                    $newReference->setPrice(($ref['Price']) ? (float)$ref['Price'] : 0);
+                    $newReference->setRefPublishers(($ref['Publishers']) ?: '');
+                    if(!empty($ref['Publishers'])) {
+                        $publishers = $this->getRelatedObjectStorage($ref['Publishers'], 'citavi_id', 'tx_nwcitavi_domain_model_publisher', 'PublisherRepository');
+                        if($publishers) {
+                            $newReference->setPublishers($publishers);
+                        }
+                    }
+                    $newReference->setRating(($ref['Rating']) ? (int)$ref['Rating'] : 0);
+                    $newReference->setRefSeriesTitle(($ref['SeriesTitleID']) ?: '');
+                    if(!empty($ref['SeriesTitleID'])) {
+                        $seriestitles = $this->getRelatedObjectStorage($ref['SeriesTitleID'], 'citavi_id', 'tx_nwcitavi_domain_model_seriestitle', 'SeriestitleRepository');
+                        if($seriestitles) {
+                            $newReference->setSeriestitles($seriestitles);
+                        }
+                    }
+                    $newReference->setShortTitle(($ref['ShortTitle']) ?: '');
+                    $newReference->setSourceOfBibliographicInformation(($ref['SourceOfBibliographicInformation']) ?: '');
+                    $newReference->setSpecificField1(($ref['SpecificField1']) ?: '');
+                    $newReference->setSpecificField2(($ref['SpecificField2']) ?: '');
+                    $newReference->setSpecificField4(($ref['SpecificField4']) ?: '');
+                    $newReference->setSpecificField7(($ref['SpecificField7']) ?: '');
+                    $newReference->setStorageMedium(($ref['StorageMedium']) ?: '');
+                    $newReference->setSubtitle(($ref['Subtitle']) ?: '');
+                    $newReference->setTableOfContents(($ref['TableOfContents']) ?: '');
+                    $newReference->setTableOfContentsRTF(($ref['TableOfContentsRTF']) ?: '');
+                    $newReference->setTitle(($ref['Title']) ?: '');
+                    $newReference->setTitleInOtherLanguages(($ref['TitleInOtherLanguages']) ?: '');
+                    $newReference->setTitleSupplement(($ref['TitleSupplement']) ?: '');
+                    $newReference->setTranslatedTitle(($ref['TranslatedTitle']) ?: '');
+                    $newReference->setUniformTitle(($ref['UniformTitle']) ?: '');
+                    $newReference->setBookVolume(($ref['Volume']) ?: '');
+                    $newReference->setBookYear(($ref['Year']) ?: '');
+                    $newReference->setLiteraturlistId($key);
+                    $newReference->setPageRangeStart(($ref['PageRange']['@attributes']['StartPage']) ?: '');
+                    $newReference->setPageRangeEnd(($ref['PageRange']['@attributes']['EndPage']) ?: '');
+                    $newReference->setDoi(($ref['@attributes']['Doi']) ?: '0');
+                    $sortDateParts = explode('.', $ref['sortDate']);
+                    if(count($sortDateParts) > 0) {
+                        foreach($sortDateParts as $part) {
+                            if(strlen($part) === 4) {
+                                $ref['sortDate'] = $part;
+                            }
+                        }
+                    }
+                    $newReference->setSortDate(($ref['sortDate']) ?: '');
+                    $newReference->setTxExtbaseType('Tx_NwCitaviFe_Reference');
+                    if(!empty($ref['ParentReferenceID'])) {
+                        $parentReference = $this->getRelatedObjectStorage($ref['ParentReferenceID'], 'citavi_id', 'tx_nwcitavi_domain_model_reference', 'ReferenceRepository');
+                        if($parentReference) {
+                            $newReference->setParentReferences($parentReference);
+                        }
+                    }
+                    if($columnExists) {
+                        $repository->update($newReference);
+                    } else {
+                        $repository->add($newReference);
+                    }
+                } catch (Exception $e) {
+                    $this->logRepository->addLog(1, 'Reference "'.$ref['Title'].'" could not be parsed. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
                 }
-              }
-            }
-            $newReference->setSortDate(($this->sortDate) ? $this->sortDate : '');
-            $newReference->setTxExtbaseType('Tx_NwCitaviFe_Reference');
-            if($ref['ParentReferenceID'] != '') {
-              $parentReference = $this->getRelatedObjectStorage($ref['ParentReferenceID'], 'citavi_id', 'tx_nwcitavi_domain_model_reference', 'ReferenceRepository');
-              if($parentReference) {
-                $newReference->setParentReferences($parentReference);
-              }
-            }
-            if($columnExists) {
-              $repository->update($newReference);
-            } else {
-              $repository->add($newReference);
-            }
-          } catch (Exception $e) {
-            $this->logRepository->addLog(1, 'Reference "'.$ref['Title'].'" could not be parsed. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-          }
-          break;
-        case 'Keyword':
-          try {
-            $repository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\KeywordRepository');
-            if($columnExists) {
-              $newReference = $columnExists;
-            } else {
-              $newReference = new \Netzweber\NwCitavi\Domain\Model\Keyword();
-            }
-            $newReference->setPid(($settings['sPid']) ? $settings['sPid'] : '0');
-            $newReference->setCitaviHash($this->hash);
-            $newReference->setCitaviId(($ref['@attributes']['ID']) ? $ref['@attributes']['ID'] : '0');
-            $newReference->setCreatedBy(($ref['@attributes']['CreatedBy']) ? $ref['@attributes']['CreatedBy'] : '0');
-            $newReference->setCreatedBySid(($ref['@attributes']['CreatedBySid']) ? $ref['@attributes']['CreatedBySid'] : '0');
-            $createdOn = new \DateTime(($ref['@attributes']['CreatedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['CreatedOn']) : '1000-01-01 00:00:00');
-            $newReference->setCreatedOn($createdOn->getTimestamp());
-            $newReference->setModifiedBy(($ref['@attributes']['ModifiedBy']) ? $ref['@attributes']['ModifiedBy'] : '0');
-            $newReference->setModifiedBySid(($ref['@attributes']['ModifiedBySid']) ? $ref['@attributes']['ModifiedBySid'] : '0');
-            $modifiedOn = new \DateTime(($ref['@attributes']['ModifiedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['ModifiedOn']) : '1000-01-01 00:00:00');
-            $newReference->setModifiedOn($modifiedOn->getTimestamp());
-            $newReference->setName(($ref['@attributes']['Name']) ? $ref['@attributes']['Name'] : '');
-            $newReference->setLiteraturlistId($this->key);
-            if($columnExists) {
-              $repository->update($newReference);
-            } else {
-              $repository->add($newReference);
-            }
-          } catch (Exception $e) {
-            $this->logRepository->addLog(1, 'Keyword "'.$ref['@attributes']['Name'].'" could not be parsed. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-          }
-          break;
-        case 'Library':
-          try {
-            $repository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\LibraryRepository');
-            if($columnExists) {
-              $newReference = $columnExists;
-            } else {
-              $newReference = new \Netzweber\NwCitavi\Domain\Model\Library();
-            }
-            $newReference->setPid(($settings['sPid']) ? $settings['sPid'] : '0');
-            $newReference->setCitaviHash($this->hash);
-            $newReference->setCitaviID(($ref['@attributes']['ID']) ? $ref['@attributes']['ID'] : '0');
-            $newReference->setCreatedBy(($ref['@attributes']['CreatedBy']) ? $ref['@attributes']['CreatedBy'] : '0');
-            $newReference->setCreatedBySid(($ref['@attributes']['CreatedBySid']) ? $ref['@attributes']['CreatedBySid'] : '0');
-            $createdOn = new \DateTime(($ref['@attributes']['CreatedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['CreatedOn']) : '1000-01-01 00:00:00');
-            $newReference->setCreatedOn($createdOn->getTimestamp());
-            $newReference->setModifiedBy(($ref['@attributes']['ModifiedBy']) ? $ref['@attributes']['ModifiedBy'] : '0');
-            $newReference->setModifiedBySid(($ref['@attributes']['ModifiedBySid']) ? $ref['@attributes']['ModifiedBySid'] : '0');
-            $modifiedOn = new \DateTime(($ref['@attributes']['ModifiedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['ModifiedOn']) : '1000-01-01 00:00:00');
-            $newReference->setModifiedOn($modifiedOn->getTimestamp());
-            $newReference->setName(($ref['@attributes']['Abbreviation']) ? $ref['@attributes']['Abbreviation'] : '');
-            $newReference->setLiteraturlistId($this->key);
-            if($columnExists) {
-              $repository->update($newReference);
-            } else {
-              $repository->add($newReference);
-            }
-          } catch (Exception $e) {
-            $this->logRepository->addLog(1, 'Library "'.$ref['@attributes']['Abbreviation'].'" could not be parsed. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-          }
-          break;
-        case 'Periodical':
-          try {
-            $repository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\PeriodicalRepository');
-            if($columnExists) {
-              $newReference = $columnExists;
-            } else {
-              $newReference = new \Netzweber\NwCitavi\Domain\Model\Periodical();
-            }
-            $newReference->setPid(($settings['sPid']) ? $settings['sPid'] : '0');
-            $newReference->setCitaviHash($this->hash);
-            $newReference->setCitaviId(($ref['@attributes']['ID']) ? $ref['@attributes']['ID'] : '0');
-            $newReference->setCreatedBy(($ref['@attributes']['CreatedBy']) ? $ref['@attributes']['CreatedBy'] : '0');
-            $newReference->setCreatedBySid(($ref['@attributes']['CreatedBySid']) ? $ref['@attributes']['CreatedBySid'] : '0');
-            $createdOn = new \DateTime(($ref['@attributes']['CreatedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['CreatedOn']) : '1000-01-01 00:00:00');
-            $newReference->setCreatedOn($createdOn->getTimestamp());
-            $newReference->setModifiedBy(($ref['@attributes']['ModifiedBy']) ? $ref['@attributes']['ModifiedBy'] : '0');
-            $newReference->setModifiedBySid(($ref['@attributes']['ModifiedBySid']) ? $ref['@attributes']['ModifiedBySid'] : '0');
-            $modifiedOn = new \DateTime(($ref['@attributes']['ModifiedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['ModifiedOn']) : '1000-01-01 00:00:00');
-            $newReference->setModifiedOn($modifiedOn->getTimestamp());
-            $newReference->setName(($ref['@attributes']['Name']) ? $ref['@attributes']['Name'] : '');
-            $newReference->setLiteraturlistId($this->key);
-            if($columnExists) {
-              $repository->update($newReference);
-            } else {
-              $repository->add($newReference);
-            }
-          } catch (Exception $e) {
-            $this->logRepository->addLog(1, 'Periodical "'.$ref['@attributes']['Name'].'" could not be parsed. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-          }
-          break;
-        case 'Person':
-          try {
-            $repository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\PersonRepository');
-            if($columnExists) {
-              $newReference = $columnExists;
-            } else {
-              $newReference = new \Netzweber\NwCitavi\Domain\Model\Person();
-            }
-            $newReference->setPid(($settings['sPid']) ? $settings['sPid'] : '0');
-            $newReference->setCitaviHash($this->hash);
-            $newReference->setCitaviId(($ref['@attributes']['ID']) ? $ref['@attributes']['ID'] : '0');
-            $newReference->setCreatedBy(($ref['@attributes']['CreatedBy']) ? $ref['@attributes']['CreatedBy'] : '0');
-            $newReference->setCreatedBySid(($ref['@attributes']['CreatedBySid']) ? $ref['@attributes']['CreatedBySid'] : '0');
-            $createdOn = new \DateTime(($ref['@attributes']['CreatedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['CreatedOn']) : '1000-01-01 00:00:00');
-            $newReference->setCreatedOn($createdOn->getTimestamp());
-            $newReference->setModifiedBy(($ref['@attributes']['ModifiedBy']) ? $ref['@attributes']['ModifiedBy'] : '0');
-            $newReference->setModifiedBySid(($ref['@attributes']['ModifiedBySid']) ? $ref['@attributes']['ModifiedBySid'] : '0');
-            $modifiedOn = new \DateTime(($ref['@attributes']['ModifiedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['ModifiedOn']) : '1000-01-01 00:00:00');
-            $newReference->setModifiedOn($modifiedOn->getTimestamp());
-            $fullName = '';
-            if($ref['@attributes']['LastName']) {
-              $fullName .= $ref['@attributes']['LastName'];
-            }
-            if($ref['@attributes']['FirstName']) {
-              $fullName .= ', '.$ref['@attributes']['FirstName'];
-            }
-            if($ref['@attributes']['MiddleName']) {
-              $fullName .= ' '.$ref['@attributes']['MiddleName'];
-            }
-            $newReference->setFullName(($fullName) ? $fullName : '');
-            $newReference->setFirstName(($ref['@attributes']['FirstName']) ? $ref['@attributes']['FirstName'] : '');
-            $newReference->setLastName(($ref['@attributes']['LastName']) ? $ref['@attributes']['LastName'] : '');
-            $newReference->setMiddleName(($ref['@attributes']['MiddleName']) ? $ref['@attributes']['MiddleName'] : '');
-            $newReference->setPref(($ref['@attributes']['Prefix']) ? $ref['@attributes']['Prefix'] : '');
-            $newReference->setSuff(($ref['@attributes']['Suffix']) ? $ref['@attributes']['Suffix'] : '');
-            $newReference->setAbbreviation(($ref['@attributes']['Abbreviation']) ? $ref['@attributes']['Abbreviation'] : '');
-            $newReference->setSex(($ref['@attributes']['Sex']) ? $ref['@attributes']['Sex'] : '');
-            $newReference->setLiteraturlistId($this->key);
-            if($columnExists) {
-              $repository->update($newReference);
-            } else {
-              $repository->add($newReference);
-            }
-          } catch (Exception $e) {
-            $this->logRepository->addLog(1, 'Person "'.$fullName.'" could not be parsed. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-          }
-          break;
-        case 'Publisher':
-          try {
-            $repository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\PublisherRepository');
-            if($columnExists) {
-              $newReference = $columnExists;
-            } else {
-              $newReference = new \Netzweber\NwCitavi\Domain\Model\Publisher();
-            }
-            $newReference->setPid(($settings['sPid']) ? $settings['sPid'] : '0');
-            $newReference->setCitaviHash($this->hash);
-            $newReference->setCitaviId(($ref['@attributes']['ID']) ? $ref['@attributes']['ID'] : '0');
-            $newReference->setCreatedBy(($ref['@attributes']['CreatedBy']) ? $ref['@attributes']['CreatedBy'] : '0');
-            $newReference->setCreatedBySid(($ref['@attributes']['CreatedBySid']) ? $ref['@attributes']['CreatedBySid'] : '0');
-            $createdOn = new \DateTime(($ref['@attributes']['CreatedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['CreatedOn']) : '1000-01-01 00:00:00');
-            $newReference->setCreatedOn($createdOn->getTimestamp());
-            $newReference->setModifiedBy(($ref['@attributes']['ModifiedBy']) ? $ref['@attributes']['ModifiedBy'] : '0');
-            $newReference->setModifiedBySid(($ref['@attributes']['ModifiedBySid']) ? $ref['@attributes']['ModifiedBySid'] : '0');
-            $modifiedOn = new \DateTime(($ref['@attributes']['ModifiedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['ModifiedOn']) : '1000-01-01 00:00:00');
-            $newReference->setModifiedOn($modifiedOn->getTimestamp());
-            $newReference->setName(($ref['@attributes']['Name']) ? $ref['@attributes']['Name'] : '');
-            $newReference->setLiteraturlistId($this->key);
-            if($columnExists) {
-              $repository->update($newReference);
-            } else {
-              $repository->add($newReference);
-            }
-          } catch (Exception $e) {
-            $this->logRepository->addLog(1, 'Publisher "'.$ref['@attributes']['Name'].'" could not be parsed. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-          }
-          break;
-        case 'SeriesTitle':
-          try {
-            $repository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\SeriestitleRepository');
-            if($columnExists) {
-              $newReference = $columnExists;
-            } else {
-              $newReference = new \Netzweber\NwCitavi\Domain\Model\Seriestitle();
-            }
-            $newReference->setPid(($settings['sPid']) ? $settings['sPid'] : '0');
-            $newReference->setCitaviHash($this->hash);
-            $newReference->setCitaviId(($ref['@attributes']['ID']) ? $ref['@attributes']['ID'] : '0');
-            $newReference->setCreatedBy(($ref['@attributes']['CreatedBy']) ? $ref['@attributes']['CreatedBy'] : '0');
-            $newReference->setCreatedBySid(($ref['@attributes']['CreatedBySid']) ? $ref['@attributes']['CreatedBySid'] : '0');
-            $createdOn = new \DateTime(($ref['@attributes']['CreatedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['CreatedOn']) : '1000-01-01 00:00:00');
-            $newReference->setCreatedOn($createdOn->getTimestamp());
-            $newReference->setModifiedBy(($ref['@attributes']['ModifiedBy']) ? $ref['@attributes']['ModifiedBy'] : '0');
-            $newReference->setModifiedBySid(($ref['@attributes']['ModifiedBySid']) ? $ref['@attributes']['ModifiedBySid'] : '0');
-            $modifiedOn = new \DateTime(($ref['@attributes']['ModifiedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['ModifiedOn']) : '1000-01-01 00:00:00');
-            $newReference->setModifiedOn($modifiedOn->getTimestamp());
-            $newReference->setName(($ref['@attributes']['Name']) ? $ref['@attributes']['Name'] : '');
-            $newReference->setLiteraturlistId($this->key);
-            if($columnExists) {
-              $repository->update($newReference);
-            } else {
-              $repository->add($newReference);
-            }
-          } catch (Exception $e) {
-            $this->logRepository->addLog(1, 'SeriesTitle "'.$ref['@attributes']['Name'].'" could not be parsed. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-          }
-          break;
-        case 'KnowledgeItem':
-          try {
-            $repository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\KnowledgeItemRepository');
-            if($columnExists) {
-              $newReference = $columnExists;
-            } else {
-              $newReference = new \Netzweber\NwCitavi\Domain\Model\KnowledgeItem();
-            }
-            $newReference->setPid(($settings['sPid']) ? $settings['sPid'] : '0');
-            $newReference->setCitaviHash($this->hash);
-            $newReference->setCitaviID(($ref['@attributes']['ID']) ? $ref['@attributes']['ID'] : '0');
-            $newReference->setCreatedBy(($ref['@attributes']['CreatedBy']) ? $ref['@attributes']['CreatedBy'] : '0');
-            $newReference->setCreatedBySid(($ref['@attributes']['CreatedBySid']) ? $ref['@attributes']['CreatedBySid'] : '0');
-            $createdOn = new \DateTime(($ref['@attributes']['CreatedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['CreatedOn']) : '1000-01-01 00:00:00');
-            $newReference->setCreatedOn($createdOn->getTimestamp());
-            $newReference->setModifiedBy(($ref['@attributes']['ModifiedBy']) ? $ref['@attributes']['ModifiedBy'] : '0');
-            $newReference->setModifiedBySid(($ref['@attributes']['ModifiedBySid']) ? $ref['@attributes']['ModifiedBySid'] : '0');
-            $modifiedOn = new \DateTime(($ref['@attributes']['ModifiedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['ModifiedOn']) : '1000-01-01 00:00:00');
-            $newReference->setModifiedOn($modifiedOn->getTimestamp());
-            $newReference->setKnowledgeItemType(($ref['@attributes']['KnowledgeItemType']) ? $ref['@attributes']['KnowledgeItemType'] : '0');
-            $newReference->setCoreStatement(($ref['CoreStatement']) ? $ref['CoreStatement'] : '');
-            $newReference->setCoreStatementUpdateType(($ref['CoreStatementUpdateType']) ? $ref['CoreStatementUpdateType'] : '');
-            $newReference->setText(($ref['Text']) ? $ref['Text'] : '');
-            $newReference->setTextRTF(($ref['TextRTF']) ? $ref['TextRTF'] : '');
-            $newReference->setLiteraturlistId($this->key);
-            if($columnExists) {
-              $repository->update($newReference);
-            } else {
-              $repository->add($newReference);
-            }
-          } catch (Exception $e) {
-            $this->logRepository->addLog(1, 'KnowledgeItem "'.$ref['Text'].'" could not be parsed. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-          }
-          break;
-        case 'Category':
-          try {
-            $repository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\CategoryRepository');
-            if($columnExists) {
-              $newReference = $columnExists;
-            } else {
-              $newReference = new \Netzweber\NwCitavi\Domain\Model\Category();
-            }
-            $newReference->setPid(($settings['sPid']) ? $settings['sPid'] : '0');
-            $newReference->setCitaviHash($this->hash);
-            $newReference->setCitaviId(($ref['@attributes']['ID']) ? $ref['@attributes']['ID'] : '0');
-            $newReference->setCreatedBy(($ref['@attributes']['CreatedBy']) ? $ref['@attributes']['CreatedBy'] : '0');
-            $newReference->setCreatedBySid(($ref['@attributes']['CreatedBySid']) ? $ref['@attributes']['CreatedBySid'] : '0');
-            $createdOn = new \DateTime(($ref['@attributes']['CreatedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['CreatedOn']) : '1000-01-01 00:00:00');
-            $newReference->setCreatedOn($createdOn->getTimestamp());
-            $newReference->setModifiedBy(($ref['@attributes']['ModifiedBy']) ? $ref['@attributes']['ModifiedBy'] : '0');
-            $newReference->setModifiedBySid(($ref['@attributes']['ModifiedBySid']) ? $ref['@attributes']['ModifiedBySid'] : '0');
-            $modifiedOn = new \DateTime(($ref['@attributes']['ModifiedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['ModifiedOn']) : '1000-01-01 00:00:00');
-            $newReference->setModifiedOn($modifiedOn->getTimestamp());
-            $newReference->setTitle(($ref['@attributes']['Name']) ? $ref['@attributes']['Name'] : '');
-            $newReference->setLiteraturlistId($this->key);
-            if($parent) {
-              $res = $repository->findByCitaviId($parent);
-              $parentObj = new \TYPO3\CMS\Extbase\Persistence\ObjectStorage();
-              $i = 0;
-              foreach($res as $obj) {
-                if($i == 0) {
-                  $parentObj->attach($obj);
-                  $result = $obj;
-                  $i++;
+                break;
+            case 'Keyword':
+                try {
+                    $repository = $objectManager->get(KeywordRepository::class);
+                    if($columnExists) {
+                        $newKeyword = $columnExists;
+                    } else {
+                    	$newKeyword = new Keyword();
+                    }
+                    $newKeyword->setPid(($settings['sPid']) ?: '0');
+                    $newKeyword->setCitaviHash($hash);
+                    $newKeyword->setCitaviId(($ref['@attributes']['ID']) ?: '0');
+                    $newKeyword->setCreatedBy(($ref['@attributes']['CreatedBy']) ?: '0');
+                    $newKeyword->setCreatedBySid(($ref['@attributes']['CreatedBySid']) ?: '0');
+                    $createdOn = new \DateTime(($ref['@attributes']['CreatedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['CreatedOn']) : '1000-01-01 00:00:00');
+                    $newKeyword->setCreatedOn($createdOn->getTimestamp());
+                    $newKeyword->setModifiedBy(($ref['@attributes']['ModifiedBy']) ?: '0');
+                    $newKeyword->setModifiedBySid(($ref['@attributes']['ModifiedBySid']) ?: '0');
+                    $modifiedOn = new \DateTime(($ref['@attributes']['ModifiedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['ModifiedOn']) : '1000-01-01 00:00:00');
+                    $newKeyword->setModifiedOn($modifiedOn->getTimestamp());
+                    $newKeyword->setName(($ref['@attributes']['Name']) ?: '');
+                    $newKeyword->setLiteraturlistId($key);
+                    if($columnExists) {
+                        $repository->update($newKeyword);
+                    } else {
+                        $repository->add($newKeyword);
+                    }
+                } catch (Exception $e) {
+                    $this->logRepository->addLog(1, 'Keyword "'.$ref['@attributes']['Name'].'" could not be parsed. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
                 }
-              }
-              if($result) {
-                $newReference->setParent($parentObj);
-              }
-            }
-
-            if($columnExists) {
-              $repository->update($newReference);
-            } else {
-              $repository->add($newReference);
-            }
-          } catch (Exception $e) {
-            $this->logRepository->addLog(1, 'Category "'.$ref['@attributes']['Name'].'" could not be parsed. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-          }
-          break;
-        case 'Location':
-          try {
-            $repository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\LocationRepository');
-            if($columnExists) {
-              $newReference = $columnExists;
-            } else {
-              $newReference = new \Netzweber\NwCitavi\Domain\Model\Location();
-            }
-            $newReference->setPid(($settings['sPid']) ? $settings['sPid'] : '0');
-            $newReference->setCitaviHash($this->hash);
-            $newReference->setCitaviId(($ref['@attributes']['ID']) ? $ref['@attributes']['ID'] : '0');
-            $newReference->setCreatedBy(($ref['@attributes']['CreatedBy']) ? $ref['@attributes']['CreatedBy'] : '0');
-            $newReference->setCreatedBySid(($ref['@attributes']['CreatedBySid']) ? $ref['@attributes']['CreatedBySid'] : '0');
-            $createdOn = new \DateTime(($ref['@attributes']['CreatedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['CreatedOn']) : '1000-01-01 00:00:00');
-            $newReference->setCreatedOn($createdOn->getTimestamp());
-            $newReference->setModifiedBy(($ref['@attributes']['ModifiedBy']) ? $ref['@attributes']['ModifiedBy'] : '0');
-            $newReference->setModifiedBySid(($ref['@attributes']['ModifiedBySid']) ? $ref['@attributes']['ModifiedBySid'] : '0');
-            $modifiedOn = new \DateTime(($ref['@attributes']['ModifiedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['ModifiedOn']) : '1000-01-01 00:00:00');
-            $newReference->setModifiedOn($modifiedOn->getTimestamp());
-            $newReference->setAddress(($ref['Address']) ? $ref['Address'] : '0');
-            $newReference->setNotes(($ref['Notes']) ? $ref['Notes'] : '0');
-            $newReference->setLocationType(($ref['@attributes']['LocationType']) ? $ref['@attributes']['LocationType'] : '0');
-            //$newReference->setAddressUri(($ref['Address']['@attributes']['AddressUri']) ? $ref['Address']['@attributes']['AddressUri'] : '0');
-            $newReference->setMirrorsReferencePropertyId(($ref['@attributes']['MirrorsReferencePropertyId']) ? $ref['@attributes']['MirrorsReferencePropertyId'] : '0');
-            $newReference->setLiteraturlistId($this->key);
-            if($columnExists) {
-              $repository->update($newReference);
-            } else {
-              $repository->add($newReference);
-            }
-          } catch (Exception $e) {
-            $this->logRepository->addLog(1, 'Location "'.$ref['Address'].'" could not be parsed. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-          }
-          break;
-      }
-      $persistenceManager = $this->objectManager->get("TYPO3\\CMS\\Extbase\\Persistence\\Generic\\PersistenceManager");
-      $persistenceManager->persistAll();
+                break;
+            case 'Library':
+                try {
+                	$repository = $objectManager->get(LibraryRepository::class);
+                	if($columnExists) {
+                	    $newLibrary = $columnExists;
+                	} else {
+                	    $newLibrary = new Library();
+                	}
+                	$newLibrary->setPid(($settings['sPid']) ?: '0');
+                	$newLibrary->setCitaviHash($hash);
+                	$newLibrary->setCitaviID(($ref['@attributes']['ID']) ?: '0');
+                	$newLibrary->setCreatedBy(($ref['@attributes']['CreatedBy']) ?: '0');
+                	$newLibrary->setCreatedBySid(($ref['@attributes']['CreatedBySid']) ?: '0');
+                	$createdOn = new \DateTime(($ref['@attributes']['CreatedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['CreatedOn']) : '1000-01-01 00:00:00');
+                	$newLibrary->setCreatedOn($createdOn->getTimestamp());
+                	$newLibrary->setModifiedBy(($ref['@attributes']['ModifiedBy']) ?: '0');
+                	$newLibrary->setModifiedBySid(($ref['@attributes']['ModifiedBySid']) ?: '0');
+                	$modifiedOn = new \DateTime(($ref['@attributes']['ModifiedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['ModifiedOn']) : '1000-01-01 00:00:00');
+                	$newLibrary->setModifiedOn($modifiedOn->getTimestamp());
+                	$newLibrary->setName(($ref['@attributes']['Abbreviation']) ?: '');
+                	$newLibrary->setLiteraturlistId($key);
+                	if($columnExists) {
+                	    $repository->update($newLibrary);
+                	} else {
+                	    $repository->add($newLibrary);
+                	}
+                } catch (Exception $e) {
+                	$this->logRepository->addLog(1, 'Library "'.$ref['@attributes']['Abbreviation'].'" could not be parsed. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                }
+                break;
+            case 'Periodical':
+                try {
+                    $repository = $objectManager->get(PeriodicalRepository::class);
+                    if($columnExists) {
+                        $newPeriodical = $columnExists;
+                    } else {
+                        $newPeriodical = new Periodical();
+                    }
+                    $newPeriodical->setPid(($settings['sPid']) ?: '0');
+                    $newPeriodical->setCitaviHash($hash);
+                    $newPeriodical->setCitaviId(($ref['@attributes']['ID']) ?: '0');
+                    $newPeriodical->setCreatedBy(($ref['@attributes']['CreatedBy']) ?: '0');
+                    $newPeriodical->setCreatedBySid(($ref['@attributes']['CreatedBySid']) ?: '0');
+                    $createdOn = new \DateTime(($ref['@attributes']['CreatedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['CreatedOn']) : '1000-01-01 00:00:00');
+                    $newPeriodical->setCreatedOn($createdOn->getTimestamp());
+                    $newPeriodical->setModifiedBy(($ref['@attributes']['ModifiedBy']) ?: '0');
+                    $newPeriodical->setModifiedBySid(($ref['@attributes']['ModifiedBySid']) ?: '0');
+                    $modifiedOn = new \DateTime(($ref['@attributes']['ModifiedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['ModifiedOn']) : '1000-01-01 00:00:00');
+                    $newPeriodical->setModifiedOn($modifiedOn->getTimestamp());
+                    $newPeriodical->setName(($ref['@attributes']['Name']) ?: '');
+                    $newPeriodical->setLiteraturlistId($key);
+                    if($columnExists) {
+                        $repository->update($newPeriodical);
+                    } else {
+                        $repository->add($newPeriodical);
+                    }
+                } catch (Exception $e) {
+                    $this->logRepository->addLog(1, 'Periodical "'.$ref['@attributes']['Name'].'" could not be parsed. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                }
+                break;
+            case 'Person':
+                try {
+                    $repository = $objectManager->get(PersonRepository::class);
+                    if($columnExists) {
+                        $newPerson = $columnExists;
+                    } else {
+                        $newPerson = new Person();
+                    }
+                    $newPerson->setPid(($settings['sPid']) ?: '0');
+                    $newPerson->setCitaviHash($hash);
+                    $newPerson->setCitaviId(($ref['@attributes']['ID']) ?: '0');
+                    $newPerson->setCreatedBy(($ref['@attributes']['CreatedBy']) ?: '0');
+                    $newPerson->setCreatedBySid(($ref['@attributes']['CreatedBySid']) ?: '0');
+                    $createdOn = new \DateTime(($ref['@attributes']['CreatedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['CreatedOn']) : '1000-01-01 00:00:00');
+                    $newPerson->setCreatedOn($createdOn->getTimestamp());
+                    $newPerson->setModifiedBy(($ref['@attributes']['ModifiedBy']) ?: '0');
+                    $newPerson->setModifiedBySid(($ref['@attributes']['ModifiedBySid']) ?: '0');
+                    $modifiedOn = new \DateTime(($ref['@attributes']['ModifiedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['ModifiedOn']) : '1000-01-01 00:00:00');
+                    $newPerson->setModifiedOn($modifiedOn->getTimestamp());
+                    $fullName = '';
+                    if($ref['@attributes']['LastName']) {
+                        $fullName .= $ref['@attributes']['LastName'];
+                    }
+                    if($ref['@attributes']['FirstName']) {
+                        $fullName .= ', '.$ref['@attributes']['FirstName'];
+                    }
+                    if($ref['@attributes']['MiddleName']) {
+                        $fullName .= ' '.$ref['@attributes']['MiddleName'];
+                    }
+                    $newPerson->setFullName(($fullName) ?: '');
+                    $newPerson->setFirstName(($ref['@attributes']['FirstName']) ?: '');
+                    $newPerson->setLastName(($ref['@attributes']['LastName']) ?: '');
+                    $newPerson->setMiddleName(($ref['@attributes']['MiddleName']) ?: '');
+                    $newPerson->setPref(($ref['@attributes']['Prefix']) ?: '');
+                    $newPerson->setSuff(($ref['@attributes']['Suffix']) ?: '');
+                    $newPerson->setAbbreviation(($ref['@attributes']['Abbreviation']) ?: '');
+                    $newPerson->setSex(($ref['@attributes']['Sex']) ?: '');
+                    $newPerson->setLiteraturlistId($key);
+                    if($columnExists) {
+                        $repository->update($newPerson);
+                    } else {
+                        $repository->add($newPerson);
+                    }
+                } catch (Exception $e) {
+                    $this->logRepository->addLog(1, 'Person "'.$fullName.'" could not be parsed. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                }
+                break;
+            case 'Publisher':
+                try {
+                    $repository = $objectManager->get(PublisherRepository::class);
+                    if($columnExists) {
+                        $newPublisher = $columnExists;
+                    } else {
+                        $newPublisher = new Publisher();
+                    }
+                    $newPublisher->setPid(($settings['sPid']) ?: '0');
+                    $newPublisher->setCitaviHash($hash);
+                    $newPublisher->setCitaviId(($ref['@attributes']['ID']) ?: '0');
+                    $newPublisher->setCreatedBy(($ref['@attributes']['CreatedBy']) ?: '0');
+                    $newPublisher->setCreatedBySid(($ref['@attributes']['CreatedBySid']) ?: '0');
+                    $createdOn = new \DateTime(($ref['@attributes']['CreatedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['CreatedOn']) : '1000-01-01 00:00:00');
+                    $newPublisher->setCreatedOn($createdOn->getTimestamp());
+                    $newPublisher->setModifiedBy(($ref['@attributes']['ModifiedBy']) ?: '0');
+                    $newPublisher->setModifiedBySid(($ref['@attributes']['ModifiedBySid']) ?: '0');
+                    $modifiedOn = new \DateTime(($ref['@attributes']['ModifiedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['ModifiedOn']) : '1000-01-01 00:00:00');
+                    $newPublisher->setModifiedOn($modifiedOn->getTimestamp());
+                    $newPublisher->setName(($ref['@attributes']['Name']) ?: '');
+                    $newPublisher->setLiteraturlistId($key);
+                    if($columnExists) {
+                        $repository->update($newPublisher);
+                    } else {
+                        $repository->add($newPublisher);
+                    }
+                } catch (Exception $e) {
+                    $this->logRepository->addLog(1, 'Publisher "'.$ref['@attributes']['Name'].'" could not be parsed. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                }
+                break;
+            case 'SeriesTitle':
+                try {
+                    $repository = $objectManager->get(SeriestitleRepository::class);
+                    if($columnExists) {
+                        $newSeriesTitle = $columnExists;
+                    } else {
+                        $newSeriesTitle = new Seriestitle();
+                    }
+                    $newSeriesTitle->setPid(($settings['sPid']) ?: '0');
+                    $newSeriesTitle->setCitaviHash($hash);
+                    $newSeriesTitle->setCitaviId(($ref['@attributes']['ID']) ?: '0');
+                    $newSeriesTitle->setCreatedBy(($ref['@attributes']['CreatedBy']) ?: '0');
+                    $newSeriesTitle->setCreatedBySid(($ref['@attributes']['CreatedBySid']) ?: '0');
+                    $createdOn = new \DateTime(($ref['@attributes']['CreatedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['CreatedOn']) : '1000-01-01 00:00:00');
+                    $newSeriesTitle->setCreatedOn($createdOn->getTimestamp());
+                    $newSeriesTitle->setModifiedBy(($ref['@attributes']['ModifiedBy']) ?: '0');
+                    $newSeriesTitle->setModifiedBySid(($ref['@attributes']['ModifiedBySid']) ?: '0');
+                    $modifiedOn = new \DateTime(($ref['@attributes']['ModifiedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['ModifiedOn']) : '1000-01-01 00:00:00');
+                    $newSeriesTitle->setModifiedOn($modifiedOn->getTimestamp());
+                    $newSeriesTitle->setName(($ref['@attributes']['Name']) ?: '');
+                    $newSeriesTitle->setLiteraturlistId($key);
+                    if($columnExists) {
+                        $repository->update($newSeriesTitle);
+                    } else {
+                        $repository->add($newSeriesTitle);
+                    }
+                } catch (Exception $e) {
+                    $this->logRepository->addLog(1, 'SeriesTitle "'.$ref['@attributes']['Name'].'" could not be parsed. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                }
+                break;
+            case 'KnowledgeItem':
+                try {
+                    $repository = $objectManager->get(KnowledgeItemRepository::class);
+                    if($columnExists) {
+                        $newKnowledgeItem = $columnExists;
+                    } else {
+                        $newKnowledgeItem = new KnowledgeItem();
+                    }
+                    $newKnowledgeItem->setPid(($settings['sPid']) ?: '0');
+                    $newKnowledgeItem->setCitaviHash($hash);
+                    $newKnowledgeItem->setCitaviID(($ref['@attributes']['ID']) ?: '0');
+                    $newKnowledgeItem->setCreatedBy(($ref['@attributes']['CreatedBy']) ?: '0');
+                    $newKnowledgeItem->setCreatedBySid(($ref['@attributes']['CreatedBySid']) ?: '0');
+                    $createdOn = new \DateTime(($ref['@attributes']['CreatedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['CreatedOn']) : '1000-01-01 00:00:00');
+                    $newKnowledgeItem->setCreatedOn($createdOn->getTimestamp());
+                    $newKnowledgeItem->setModifiedBy(($ref['@attributes']['ModifiedBy']) ?: '0');
+                    $newKnowledgeItem->setModifiedBySid(($ref['@attributes']['ModifiedBySid']) ?: '0');
+                    $modifiedOn = new \DateTime(($ref['@attributes']['ModifiedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['ModifiedOn']) : '1000-01-01 00:00:00');
+                    $newKnowledgeItem->setModifiedOn($modifiedOn->getTimestamp());
+                    $newKnowledgeItem->setKnowledgeItemType(($ref['@attributes']['KnowledgeItemType']) ?: '0');
+                    $newKnowledgeItem->setCoreStatement(($ref['CoreStatement']) ?: '');
+                    $newKnowledgeItem->setCoreStatementUpdateType(($ref['CoreStatementUpdateType']) ?: '');
+                    $newKnowledgeItem->setText(($ref['Text']) ?: '');
+                    $newKnowledgeItem->setTextRTF(($ref['TextRTF']) ?: '');
+                    $newKnowledgeItem->setLiteraturlistId($key);
+                    if($columnExists) {
+                        $repository->update($newKnowledgeItem);
+                    } else {
+                        $repository->add($newKnowledgeItem);
+                    }
+                } catch (Exception $e) {
+                    $this->logRepository->addLog(1, 'KnowledgeItem "'.$ref['Text'].'" could not be parsed. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                }
+                break;
+            case 'Category':
+                try {
+                    $repository = $objectManager->get(CategoryRepository::class);
+                    if($columnExists) {
+                        $newCategory = $columnExists;
+                    } else {
+                        $newCategory = new Category();
+                    }
+                    $newCategory->setPid(($settings['sPid']) ?: '0');
+                    $newCategory->setCitaviHash($hash);
+                    $newCategory->setCitaviId(($ref['@attributes']['ID']) ?: '0');
+                    $newCategory->setCreatedBy(($ref['@attributes']['CreatedBy']) ?: '0');
+                    $newCategory->setCreatedBySid(($ref['@attributes']['CreatedBySid']) ?: '0');
+                    $createdOn = new \DateTime(($ref['@attributes']['CreatedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['CreatedOn']) : '1000-01-01 00:00:00');
+                    $newCategory->setCreatedOn($createdOn->getTimestamp());
+                    $newCategory->setModifiedBy(($ref['@attributes']['ModifiedBy']) ?: '0');
+                    $newCategory->setModifiedBySid(($ref['@attributes']['ModifiedBySid']) ?: '0');
+                    $modifiedOn = new \DateTime(($ref['@attributes']['ModifiedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['ModifiedOn']) : '1000-01-01 00:00:00');
+                    $newCategory->setModifiedOn($modifiedOn->getTimestamp());
+                    $newCategory->setTitle(($ref['@attributes']['Name']) ?: '');
+                    $newCategory->setLiteraturlistId($key);
+                    if($parent) {
+                        $res = $repository->findByCitaviId($parent);
+                        $parentObj = new ObjectStorage();
+                        $i = 0;
+                        $result = null;
+                        foreach($res as $obj) {
+                            if($i === 0) {
+                                $parentObj->attach($obj);
+                                $result = $obj;
+                                $i++;
+                            }
+                        }
+                        if($result) {
+                            $newCategory->setParent($parentObj);
+                        }
+                    }
+                    if($columnExists) {
+                        $repository->update($newCategory);
+                    } else {
+                        $repository->add($newCategory);
+                    }
+                } catch (Exception $e) {
+                    $this->logRepository->addLog(1, 'Category "'.$ref['@attributes']['Name'].'" could not be parsed. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                }
+                break;
+            case 'Location':
+                try {
+                    $repository = $objectManager->get(LocationRepository::class);
+                    if($columnExists) {
+                        $newLocation = $columnExists;
+                    } else {
+                        $newLocation = new Location();
+                    }
+                    $newLocation->setPid(($settings['sPid']) ?: '0');
+                    $newLocation->setCitaviHash($hash);
+                    $newLocation->setCitaviId(($ref['@attributes']['ID']) ?: '0');
+                    $newLocation->setCreatedBy(($ref['@attributes']['CreatedBy']) ?: '0');
+                    $newLocation->setCreatedBySid(($ref['@attributes']['CreatedBySid']) ?: '0');
+                    $createdOn = new \DateTime(($ref['@attributes']['CreatedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['CreatedOn']) : '1000-01-01 00:00:00');
+                    $newLocation->setCreatedOn($createdOn->getTimestamp());
+                    $newLocation->setModifiedBy(($ref['@attributes']['ModifiedBy']) ?: '0');
+                    $newLocation->setModifiedBySid(($ref['@attributes']['ModifiedBySid']) ?: '0');
+                    $modifiedOn = new \DateTime(($ref['@attributes']['ModifiedOn']) ? $this->setDatetimeByCitaviDate($ref['@attributes']['ModifiedOn']) : '1000-01-01 00:00:00');
+                    $newLocation->setModifiedOn($modifiedOn->getTimestamp());
+                    $newLocation->setAddress(($ref['Address']) ?: '0');
+                    $newLocation->setNotes(($ref['Notes']) ?: '0');
+                    $newLocation->setLocationType(($ref['@attributes']['LocationType']) ?: '0');
+                    $newLocation->setMirrorsReferencePropertyId(($ref['@attributes']['MirrorsReferencePropertyId']) ?: '0');
+                    $newLocation->setLiteraturlistId($key);
+                    if($columnExists) {
+                        $repository->update($newLocation);
+                    } else {
+                        $repository->add($newLocation);
+                    }
+                } catch (Exception $e) {
+                    $this->logRepository->addLog(1, 'Location "'.$ref['Address'].'" could not be parsed. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                }
+                break;
+        }
+        $persistenceManager = $this->objectManager->get(PersistenceManager::class);
+        $persistenceManager->persistAll();
     }
 
+    /**
+     * Generates a datetime for the database
+     *
+     * @param $citaviDate
+     * @return string|string[]
+     */
     public function setDatetimeByCitaviDate($citaviDate) {
-      return str_replace("T", " ", $citaviDate);
+        return str_replace('T', ' ', $citaviDate);
     }
 
+    /**
+     * Returns related object from reference
+     *
+     * @param $keys
+     * @param $field_name
+     * @param $table
+     * @param $repository
+     * @return bool|ObjectStorage
+     */
     public function getRelatedObjectStorage($keys, $field_name, $table, $repository) {
-      $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-      $objectRepository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\'.$repository);
-      $query = $objectRepository->createQuery();
-      $keyArray = explode(";", $keys);
-      if($keyArray[0] != '') {
-        if ( is_array( $keyArray ) ) {
-          $keyArrayNum = count($keyArray);
+        $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
+        $objectRepository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\'.$repository);
+        $query = $objectRepository->createQuery();
+        $keyArray = explode(';', $keys);
+        if(!empty($keyArray[0])) {
+            $where = '';
+            $orderBy = '';
+            foreach ($keyArray as $i => $iValue) {
+                if($i === 0) {
+                	$where .= ' '.$field_name.' LIKE \''. $iValue .'\'';
+                	$orderBy .= ' ORDER BY FIELD('.$field_name.', \''. $iValue .'\'';
+                } else {
+                    $where .= ' OR '.$field_name.' LIKE \''. $iValue .'\'';
+                    $orderBy .= ', \''. $iValue .'\'';
+                }
+            }
+            if(!empty($orderBy)) {
+                $orderBy .= ') ASC';
+            }
+            $sql = 'SELECT * FROM '.$table.' WHERE '.$where.$orderBy;
+            $query->statement($sql);
+            $res = $query->execute();
+            $objectStorage = new ObjectStorage;
+            foreach($res as $obj) {
+            	$objectStorage->attach($obj);
+            }
+            return $objectStorage;
         }
-        $where = '';
-        $orderby = '';
-        for($i = 0; $i < $keyArrayNum; $i++) {
-          if($i == 0) {
-            $where .= ' '.$field_name.' LIKE \''.$keyArray[$i].'\'';
-            $orderby .= ' ORDER BY FIELD('.$field_name.', \''.$keyArray[$i].'\'';
-          } else {
-            $where .= ' OR '.$field_name.' LIKE \''.$keyArray[$i].'\'';
-            $orderby .= ', \''.$keyArray[$i].'\'';
-          }
-        }
-        if(strlen($orderby) > 0) {
-          $orderby .= ') ASC';
-        }
-        $sql = 'SELECT * FROM '.$table.' WHERE '.$where.$orderby;
-        $query->statement($sql);
-        $res = $query->execute();
-        $objectStorage = new \TYPO3\CMS\Extbase\Persistence\ObjectStorage;
-        foreach($res as $obj) {
-          $objectStorage->attach($obj);
-        }
-        return $objectStorage;
-      } else {
         return false;
-      }
     }
 
+    /**
+     * Returns related category
+     *
+     * @param $categories
+     * @return bool|ObjectStorage
+     */
     public function getRelatedCategories($categories) {
-      $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-      $categoryRepository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\CategoryRepository');
-      $query = $categoryRepository->createQuery();
-      $categoriesArray = explode(";", $categories);
-      if($categoriesArray[0] != '') {
-        if ( is_array( $categoriesArray ) ) {
-          $categoriesArrayNum = count($categoriesArray);
+        $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
+        $categoryRepository = $objectManager->get(CategoryRepository::class);
+        $query = $categoryRepository->createQuery();
+        $categoriesArray = explode(';', $categories);
+        if(!empty($categoriesArray[0])) {
+            $where = '';
+            foreach ($categoriesArray as $i => $iValue) {
+                if($i === 0) {
+                    $where .= ' citavi_id LIKE \''. $iValue .'\'';
+                } else {
+                    $where .= ' OR citavi_id LIKE \''. $iValue .'\'';
+                }
+            }
+            $sql = 'SELECT * FROM tx_nwcitavi_domain_model_category WHERE '.$where;
+            $query->statement($sql);
+            $res = $query->execute();
+            $objectStorage = new ObjectStorage;
+            foreach($res as $obj) {
+            	$objectStorage->attach($obj);
+            }
+            return $objectStorage;
         }
-        $where = '';
-        for($i = 0; $i < $categoriesArrayNum; $i++) {
-          if($i == 0) {
-            $where .= ' citavi_id LIKE \''.$categoriesArray[$i].'\'';
-          } else {
-            $where .= ' OR citavi_id LIKE \''.$categoriesArray[$i].'\'';
-          }
-        }
-        $sql = 'SELECT * FROM tx_nwcitavi_domain_model_category WHERE '.$where;
-        $query->statement($sql);
-        $res = $query->execute();
-
-        $objectStorage = new \TYPO3\CMS\Extbase\Persistence\ObjectStorage;
-        foreach($res as $obj) {
-          $objectStorage->attach($obj);
-        }
-
-        return $objectStorage;
-      } else {
         return false;
-      }
     }
 
-    public function updateReferenceLocation($ref, $locationId) {
-      $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-      $locationRepository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\LocationRepository');
-      $refQuery = $this->createQuery();
-      $refSql = 'SELECT * FROM tx_nwcitavi_domain_model_reference WHERE citavi_id LIKE \''.$ref['@attributes']['ID'].'\'';
-      $refQuery->statement($refSql);
-      $refResult = $refQuery->execute();
-      if(isset($refResult[0])) {
-        $updateReference = $refResult[0];
+    /**
+     * Update the relation between reference and location in the database
+     *
+     * @param $ref
+     * @param $locationId
+     * @throws IllegalObjectTypeException
+     * @throws UnknownObjectException
+     */
+    public function updateReferenceLocation($ref, $locationId): void
+    {
+        $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
+        $locationRepository = $objectManager->get(LocationRepository::class);
+        $refQuery = $this->createQuery();
+        $refSql = 'SELECT * FROM tx_nwcitavi_domain_model_reference WHERE citavi_id LIKE \''.$ref['@attributes']['ID'].'\'';
+        $refQuery->statement($refSql);
+        $refResult = $refQuery->execute();
+        if(isset($refResult[0])) {
+            $updateReference = $refResult[0];
+            $locationQuery = $locationRepository->createQuery();
+            $locationSql = 'SELECT * FROM tx_nwcitavi_domain_model_location WHERE citavi_id LIKE \''.$locationId.'\'';
+            $locationQuery->statement($locationSql);
+            $locationResult = $locationQuery->execute();
+            $objectStorage = new ObjectStorage;
+            foreach($locationResult as $obj) {
+                $objectStorage->attach($obj);
+            }
+            $updateReference->setLocations($objectStorage);
+            $this->update($updateReference);
+            $persistenceManager = $this->objectManager->get(PersistenceManager::class);
+            $persistenceManager->persistAll();
+        }
+    }
 
+    /**
+     * Update the relation between location and library in the database
+     *
+     * @param $locationId
+     * @param $libraryId
+     */
+    public function updateLocationLibrary($locationId, $libraryId): void
+    {
+        $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
+        $locationRepository = $objectManager->get(LocationRepository::class);
+        $libraryRepository = $objectManager->get(LibraryRepository::class);
         $locationQuery = $locationRepository->createQuery();
         $locationSql = 'SELECT * FROM tx_nwcitavi_domain_model_location WHERE citavi_id LIKE \''.$locationId.'\'';
         $locationQuery->statement($locationSql);
         $locationResult = $locationQuery->execute();
-        $objectStorage = new \TYPO3\CMS\Extbase\Persistence\ObjectStorage;
-        foreach($locationResult as $obj) {
-          $objectStorage->attach($obj);
+        $updateLocation = $locationResult[0];
+        $libraryQuery = $libraryRepository->createQuery();
+        $librarySql = 'SELECT * FROM tx_nwcitavi_domain_model_library WHERE citavi_id LIKE \''.$libraryId.'\'';
+        $libraryQuery->statement($librarySql);
+        $libraryResult = $libraryQuery->execute();
+        $objectStorage = new ObjectStorage;
+        foreach($libraryResult as $obj) {
+            $objectStorage->attach($obj);
         }
-
-        $updateReference->setLocations($objectStorage);
-        $this->update($updateReference);
-
-        $persistenceManager = $this->objectManager->get("TYPO3\\CMS\\Extbase\\Persistence\\Generic\\PersistenceManager");
+        $updateLocation->setLibrarys($objectStorage);
+        $locationRepository->update($updateLocation);
+        $persistenceManager = $this->objectManager->get(PersistenceManager::class);
         $persistenceManager->persistAll();
-      }
     }
 
-    public function updateLocationLibrary($locationId, $libraryId) {
-      $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-      $locationRepository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\LocationRepository');
-      $libraryRepository = $objectManager->get('Netzweber\\NwCitavi\\Domain\\Repository\\LibraryRepository');
-
-      $locationQuery = $locationRepository->createQuery();
-      $locationSql = 'SELECT * FROM tx_nwcitavi_domain_model_location WHERE citavi_id LIKE \''.$locationId.'\'';
-      $locationQuery->statement($locationSql);
-      $locationResult = $locationQuery->execute();
-      $updateLocation = $locationResult[0];
-
-      $libraryQuery = $libraryRepository->createQuery();
-      $librarySql = 'SELECT * FROM tx_nwcitavi_domain_model_library WHERE citavi_id LIKE \''.$libraryId.'\'';
-      $libraryQuery->statement($librarySql);
-      $libraryResult = $libraryQuery->execute();
-
-      $objectStorage = new \TYPO3\CMS\Extbase\Persistence\ObjectStorage;
-      foreach($libraryResult as $obj) {
-        $objectStorage->attach($obj);
-      }
-
-      $updateLocation->setLibrarys($objectStorage);
-      $locationRepository->update($updateLocation);
-
-      $persistenceManager = $this->objectManager->get("TYPO3\\CMS\\Extbase\\Persistence\\Generic\\PersistenceManager");
-      $persistenceManager->persistAll();
+    /**
+     * Compares duplicate entries in every database table with the hash entries
+     *
+     * @param $settings
+     */
+    public function compareHashData($settings): void
+    {
+        $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_reference');
+        $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_keyword');
+        $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_library');
+        $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_periodical');
+        $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_person');
+        $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_publisher');
+        $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_seriestitle');
+        $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_knowledgeitem');
+        $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_category');
+        $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_reference', 'tx_nwcitavi_domain_model_referencehash', $settings);
+        $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_keyword', 'tx_nwcitavi_domain_model_keywordhash', $settings);
+        $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_library', 'tx_nwcitavi_domain_model_libraryhash', $settings);
+        $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_periodical', 'tx_nwcitavi_domain_model_periodicalhash', $settings);
+        $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_person', 'tx_nwcitavi_domain_model_personhash', $settings);
+        $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_publisher', 'tx_nwcitavi_domain_model_publisherhash', $settings);
+        $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_seriestitle', 'tx_nwcitavi_domain_model_seriestitlehash', $settings);
+        $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_knowledgeitem', 'tx_nwcitavi_domain_model_knowledgeitemhash', $settings);
+        $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_category', 'tx_nwcitavi_domain_model_categoryhash', $settings);
     }
 
-    public function compareHashData($settings) {
-      $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_reference');
-      $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_keyword');
-      $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_library');
-      $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_periodical');
-      $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_person');
-      $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_publisher');
-      $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_seriestitle');
-      $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_knowledgeitem');
-      $this->deletedDoubleDatabaseColumns('tx_nwcitavi_domain_model_category');
-
-      $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_reference', 'tx_nwcitavi_domain_model_referencehash', $settings);
-      $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_keyword', 'tx_nwcitavi_domain_model_keywordhash', $settings);
-      $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_library', 'tx_nwcitavi_domain_model_libraryhash', $settings);
-      $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_periodical', 'tx_nwcitavi_domain_model_periodicalhash', $settings);
-      $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_person', 'tx_nwcitavi_domain_model_personhash', $settings);
-      $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_publisher', 'tx_nwcitavi_domain_model_publisherhash', $settings);
-      $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_seriestitle', 'tx_nwcitavi_domain_model_seriestitlehash', $settings);
-      $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_knowledgeitem', 'tx_nwcitavi_domain_model_knowledgeitemhash', $settings);
-      $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_category', 'tx_nwcitavi_domain_model_categoryhash', $settings);
+    /**
+     * Delete duplicate entries in database table
+     *
+     * @param $t
+     */
+    public function deletedDoubleDatabaseColumns($t): void
+    {
+        $query = $this->createQuery();
+        $query->statement('DELETE t1 FROM '.$t.' t1 INNER JOIN '.$t.' t2 WHERE t1.uid < t2.uid AND t1.citavi_hash = t2.citavi_hash;');
     }
 
-    public function deletedDoubleDatabaseColumns($t) {
-      $GLOBALS['TYPO3_DB']->sql_query('DELETE t1 FROM '.$t.' t1 INNER JOIN '.$t.' t2 WHERE t1.uid < t2.uid AND t1.citavi_hash = t2.citavi_hash;');
-    }
-
-    public function parseCategories($level, $array, $settings, $parent = null) {
-      $categoryCount = count($array['Categories']['Category']);
-      for($i = 0; $i < $categoryCount; $i++) {
-        if($array['Categories']['Category']['@attributes']) {
-          $category = $array['Categories']['Category'];
-        } else {
-          $category = $array['Categories']['Category'][$i];
-        }
-        if(strlen($category['@attributes']['ID']) > 0) {
-          $refstr = $this->generatedHash($category);
-          $this->hash = hash("md5", $refstr);
-          $this->insertInHashTable('CategoryHashRepository', 'CategoryHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
-          $columnExists = $this->columnExists('CategoryRepository', $category['@attributes']['ID'], 'tx_nwcitavi_domain_model_category');
-
-          $this->setDatabase($category, 'Category', $columnExists, $settings, $parent);
-          if ( is_array( $category['Categories']['Category'] ) ) {
-            $this->parseCategories($level++, $category, $settings, $category['@attributes']['ID']);
-          }
-        }
-      }
-      unset($category);
-    }
-
-    public function taskParseXMLCategories() {
-      try {
-        $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-        $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload');
-        $this->initTSFE($this->getRootpage($objectManager));
-        $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
-        $check = file_exists($this->dir.'/scheduler.txt');
-        if($check && (int)$settings['sPid'] > 0) {
-          $taskExists = file_exists($this->dir.'/task.txt');
-          if(!$taskExists) {
-            $schedulerString = file_get_contents ( $this->dir.'/scheduler.txt' );
-            $schedulerCols = explode("|", $schedulerString);
-            $fileName = $schedulerCols[0];
-            $this->key = $schedulerCols[1];
-            $uniqid = $schedulerCols[2];
-            $this->xml = new \XMLReader();
-            $this->xml->open($fileName);
-            $xmlstring = implode("", file($fileName));
-            $xml = simplexml_load_string($xmlstring);
-            $json = json_encode($xml);
-            $array = json_decode($json,TRUE);
-            $contents = var_export($array, true);
-            $xmlObj = new \SimpleXMLElement($xmlstring);
-            $level = 0;
-
-            try {
-              if ( is_array( $array['Categories']['Category'] ) ) {
-                $this->truncateDatabase('tx_nwcitavi_domain_model_categoryhash');
-                $this->parseCategories($level, $array, $settings);
-                file_put_contents($this->dir.'/task.txt', 1);
-                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                   'The categories have been created successfully',
-                   'Successful',
-                   FlashMessage::OK,
-                   TRUE
-                );
-              } else {
-                file_put_contents($this->dir.'/task.txt', 1);
-                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                   'No categories to create',
-                   'Info',
-                   FlashMessage::INFO,
-                   TRUE
-                );
-              }
-
-              $flashMessageService = $objectManager->get(FlashMessageService::class);
-              $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-              $messageQueue->addMessage($message);
-            } catch (Exception $e) {
-              $this->logRepository->addLog(1, 'Categories could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-              $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                 $e,
-                 'Error: Categories could not be generated',
-                 FlashMessage::ERROR,
-                 TRUE
-              );
-
-              $flashMessageService = $objectManager->get(FlashMessageService::class);
-              $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-              $messageQueue->addMessage($message);
-            }
-            $this->xml->close();
-          } else {
-            $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-               'Task parse categories is not your turn',
-               'Waiting',
-               FlashMessage::WARNING,
-               TRUE
-            );
-
-            $flashMessageService = $objectManager->get(FlashMessageService::class);
-            $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-            $messageQueue->addMessage($message);
-          }
-        }
-      } catch (Exception $e) {
-        $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-           $e,
-           'Error: Task was terminated',
-           FlashMessage::ERROR,
-           TRUE
-        );
-
-        $flashMessageService = $objectManager->get(FlashMessageService::class);
-        $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-        $messageQueue->addMessage($message);
-      }
-    }
-
-    public function taskParseXMLKeywords() {
-      try {
-        $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-        $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
-        $this->initTSFE($this->getRootpage($objectManager));
-        $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
-        $check = file_exists($this->dir.'/scheduler.txt');
-        if($check) {
-          $taskExists = file_exists($this->dir.'/task.txt');
-          if($taskExists) {
-            $taskString = file_get_contents ( $this->dir.'/task.txt' );
-            $taskCols = explode("|", $taskString);
-            if((int)$taskCols[0] == 1) {
-              $schedulerString = file_get_contents ( $this->dir.'/scheduler.txt' );
-              $schedulerCols = explode("|", $schedulerString);
-              $fileName = $schedulerCols[0];
-              $this->key = $schedulerCols[1];
-              $uniqid = $schedulerCols[2];
-              $this->xml = new \XMLReader();
-              $this->xml->open($fileName);
-              $xmlstring = implode("", file($fileName));
-              $xml = simplexml_load_string($xmlstring);
-              $json = json_encode($xml);
-              $array = json_decode($json,TRUE);
-              $contents = var_export($array, true);
-              $xmlObj = new \SimpleXMLElement($xmlstring);
-
-              try {
-                if ( is_array( $array['Keywords']['Keyword'] ) ) {
-                  $keywordsCount = count($array['Keywords']['Keyword']);
-                  $this->truncateDatabase('tx_nwcitavi_domain_model_keywordhash');
-                  for($i = 0; $i < $keywordsCount; $i++) {
-                    if($array['Keywords']['Keyword']['@attributes']) {
-                      $keyword = $array['Keywords']['Keyword'];
-                    } else {
-                      $keyword = $array['Keywords']['Keyword'][$i];
-                    }
-
-                    if(strlen($keyword['@attributes']['ID']) > 0) {
-                      $refstr = $this->generatedHash($keyword);
-                      $this->hash = hash("md5", $refstr);
-                      $this->insertInHashTable('KeywordHashRepository', 'KeywordHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
-                      $columnExists = $this->columnExists('KeywordRepository', $keyword['@attributes']['ID'], 'tx_nwcitavi_domain_model_keyword');
-
-                      $this->setDatabase($keyword, 'Keyword', $columnExists, $settings);
-                    }
-                    unset($keyword, $keywordAttributes, $db_keyword, $keywordUid);
-                  }
-                  $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_keyword', 'tx_nwcitavi_domain_model_keywordhash', $settings);
-                  file_put_contents($this->dir.'/task.txt', 2);
-                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                     'The keywords have been created successfully',
-                     'Successful',
-                     FlashMessage::OK,
-                     TRUE
-                  );
-                } else {
-                  file_put_contents($this->dir.'/task.txt', 2);
-                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                     'No keywords to create',
-                     'Info',
-                     FlashMessage::INFO,
-                     TRUE
-                  );
-                }
-
-                $flashMessageService = $objectManager->get(FlashMessageService::class);
-                $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-                $messageQueue->addMessage($message);
-              } catch (Exception $e) {
-                $this->logRepository->addLog(1, 'Keywords could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                   $e,
-                   'Error: Keywords could not be generated',
-                   FlashMessage::ERROR,
-                   TRUE
-                );
-
-                $flashMessageService = $objectManager->get(FlashMessageService::class);
-                $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-                $messageQueue->addMessage($message);
-              }
-              $this->xml->close();
+    /**
+     * Generates the structure of the categories
+     *
+     * @param $level
+     * @param $array
+     * @param $settings
+     * @param $key
+     * @param $uniqueId
+     * @param null $parent
+     */
+    public function parseCategories($level, $array, $settings, $key, $uniqueId, $parent = null): void
+    {
+        foreach ($array['Categories']['Category'] as $iValue) {
+            if($array['Categories']['Category']['@attributes']) {
+                $category = $array['Categories']['Category'];
             } else {
-              $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                 'Task parse keywords is not your turn',
-                 'Waiting',
-                 FlashMessage::WARNING,
-                 TRUE
-              );
-
-              $flashMessageService = $objectManager->get(FlashMessageService::class);
-              $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-              $messageQueue->addMessage($message);
+                $category = $iValue;
             }
-          }
-        }
-      } catch (Exception $e) {
-        $This->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-           $e,
-           'Error: Task was terminated',
-           FlashMessage::ERROR,
-           TRUE
-        );
+            if(!empty($category['@attributes']['ID'])) {
+                $refStr = $this->generatedHash($category);
+                $hash = hash('md5', $refStr);
+                $this->insertInHashTable( 'CategoryHash', $hash, ($settings['sPid']) ?: '0');
+                $columnExists = $this->columnExists('CategoryRepository', $category['@attributes']['ID'], 'tx_nwcitavi_domain_model_category');
 
-        $flashMessageService = $objectManager->get(FlashMessageService::class);
-        $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-        $messageQueue->addMessage($message);
-      }
-    }
-
-    public function taskParseXMLLibraries() {
-      try {
-        $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-        $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
-        $this->initTSFE($this->getRootpage($objectManager));
-        $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
-        $check = file_exists($this->dir.'/scheduler.txt');
-        if($check) {
-          $taskExists = file_exists($this->dir.'/task.txt');
-          if($taskExists) {
-            $taskString = file_get_contents ( $this->dir.'/task.txt' );
-            $taskCols = explode("|", $taskString);
-            if((int)$taskCols[0] == 2) {
-              $schedulerString = file_get_contents ( $this->dir.'/scheduler.txt' );
-              $schedulerCols = explode("|", $schedulerString);
-              $fileName = $schedulerCols[0];
-              $this->key = $schedulerCols[1];
-              $uniqid = $schedulerCols[2];
-              $this->xml = new \XMLReader();
-              $this->xml->open($fileName);
-              $xmlstring = implode("", file($fileName));
-              $xml = simplexml_load_string($xmlstring);
-              $json = json_encode($xml);
-              $array = json_decode($json,TRUE);
-              $contents = var_export($array, true);
-              $xmlObj = new \SimpleXMLElement($xmlstring);
-              try {
-                if ( is_array( $array['Libraries']['Library'] ) ) {
-                  $librariesCount = count($array['Libraries']['Library']);
-                  $this->truncateDatabase('tx_nwcitavi_domain_model_libraryhash');
-                  for($i = 0; $i < $librariesCount; $i++) {
-                    if($array['Libraries']['Library']['@attributes']) {
-                      $library = $array['Libraries']['Library'];
-                    } else {
-                      $library = $array['Libraries']['Library'][$i];
-                    }
-
-                    if(strlen($library['@attributes']['ID']) > 0) {
-                      $refstr = $this->generatedHash($library);
-                      $this->hash = hash("md5", $refstr);
-                      $this->insertInHashTable('LibraryHashRepository', 'LibraryHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
-                      $columnExists = $this->columnExists('LibraryRepository', $library['@attributes']['ID'], 'tx_nwcitavi_domain_model_library');
-
-                      $this->setDatabase($library, 'Library', $columnExists, $settings);
-                    }
-                    unset($library, $libraryAttributes, $db_library, $libraryUid);
-                  }
-                  $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_library', 'tx_nwcitavi_domain_model_libraryhash', $settings);
-                  file_put_contents($this->dir.'/task.txt', 3);
-                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                     'The libraries have been created successfully',
-                     'Successful',
-                     FlashMessage::OK,
-                     TRUE
-                  );
-                } else {
-                  file_put_contents($this->dir.'/task.txt', 3);
-                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                     'No libraries to create',
-                     'Info',
-                     FlashMessage::INFO,
-                     TRUE
-                  );
+                $this->setDatabase($category, 'Category', $columnExists, $hash, $key, $uniqueId, $settings, $parent);
+                if ( is_array( $category['Categories']['Category'] ) ) {
+                    $this->parseCategories($level++, $category, $settings, $key, $uniqueId, $category['@attributes']['ID']);
                 }
-
-                $flashMessageService = $objectManager->get(FlashMessageService::class);
-                $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-                $messageQueue->addMessage($message);
-              } catch (Exception $e) {
-                $this->logRepository->addLog(1, 'Libraries could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                   $e,
-                   'Error: Libraries could not be generated',
-                   FlashMessage::ERROR,
-                   TRUE
-                );
-
-                $flashMessageService = $objectManager->get(FlashMessageService::class);
-                $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-                $messageQueue->addMessage($message);
-              }
-              $this->xml->close();
-            } else {
-              $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                 'Task parse libraries is not your turn',
-                 'Waiting',
-                 FlashMessage::WARNING,
-                 TRUE
-              );
-
-              $flashMessageService = $objectManager->get(FlashMessageService::class);
-              $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-              $messageQueue->addMessage($message);
             }
-          }
         }
-      } catch (Exception $e) {
-        $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-           $e,
-           'Error: Task was terminated',
-           FlashMessage::ERROR,
-           TRUE
-        );
-
-        $flashMessageService = $objectManager->get(FlashMessageService::class);
-        $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-        $messageQueue->addMessage($message);
-      }
+        unset($category);
     }
 
-    public function taskParseXMLPeriodicals() {
-      try {
-        $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-        $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
-        $this->initTSFE($this->getRootpage($objectManager));
-        $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
-        $check = file_exists($this->dir.'/scheduler.txt');
-        if($check) {
-          $taskExists = file_exists($this->dir.'/task.txt');
-          if($taskExists) {
-            $taskString = file_get_contents ( $this->dir.'/task.txt' );
-            $taskCols = explode("|", $taskString);
-            if((int)$taskCols[0] == 3) {
-              $schedulerString = file_get_contents ( $this->dir.'/scheduler.txt' );
-              $schedulerCols = explode("|", $schedulerString);
-              $fileName = $schedulerCols[0];
-              $this->key = $schedulerCols[1];
-              $uniqid = $schedulerCols[2];
-              $this->xml = new \XMLReader();
-              $this->xml->open($fileName);
-              $xmlstring = implode("", file($fileName));
-              $xml = simplexml_load_string($xmlstring);
-              $json = json_encode($xml);
-              $array = json_decode($json,TRUE);
-              $contents = var_export($array, true);
-              $xmlObj = new \SimpleXMLElement($xmlstring);
-              try {
-                if ( is_array( $array['Periodicals']['Periodical'] ) ) {
-                  $periodicalsCount = count($array['Periodicals']['Periodical']);
-                  $this->truncateDatabase('tx_nwcitavi_domain_model_periodicalhash');
-                  for($i = 0; $i < $periodicalsCount; $i++) {
-                    if($array['Periodicals']['Periodical']['@attributes']) {
-                      $periodical = $array['Periodicals']['Periodical'];
-                    } else {
-                      $periodical = $array['Periodicals']['Periodical'][$i];
-                    }
-
-                    if(strlen($periodical['@attributes']['ID']) > 0) {
-                      $refstr = $this->generatedHash($periodical);
-                      $this->hash = hash("md5", $refstr);
-                      $this->insertInHashTable('PeriodicalHashRepository', 'PeriodicalHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
-                      $columnExists = $this->columnExists('PeriodicalRepository', $periodical['@attributes']['ID'], 'tx_nwcitavi_domain_model_periodical');
-
-                      $this->setDatabase($periodical, 'Periodical', $columnExists, $settings);
-                    }
-                    unset($periodical, $periodicalAttributes, $db_periodical, $periodicalUid);
-                  }
-                  $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_periodical', 'tx_nwcitavi_domain_model_periodicalhash', $settings);
-                  file_put_contents($this->dir.'/task.txt', 4);
-                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                     'The periodicals have been created successfully',
-                     'Successful',
-                     FlashMessage::OK,
-                     TRUE
-                  );
-                } else {
-                  file_put_contents($this->dir.'/task.txt', 4);
-                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                     'No periodicals to create',
-                     'Info',
-                     FlashMessage::INFO,
-                     TRUE
-                  );
-                }
-
-                $flashMessageService = $objectManager->get(FlashMessageService::class);
-                $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-                $messageQueue->addMessage($message);
-              } catch (Exception $e) {
-                $this->logRepository->addLog(1, 'Periodicals could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                   $e,
-                   'Error: Periodicals could not be generated',
-                   FlashMessage::ERROR,
-                   TRUE
-                );
-
-                $flashMessageService = $objectManager->get(FlashMessageService::class);
-                $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-                $messageQueue->addMessage($message);
-              }
-              $this->xml->close();
-            } else {
-              $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                 'Task parse periodicals is not your turn',
-                 'Waiting',
-                 FlashMessage::WARNING,
-                 TRUE
-              );
-
-              $flashMessageService = $objectManager->get(FlashMessageService::class);
-              $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-              $messageQueue->addMessage($message);
-            }
-          }
-        }
-      } catch (Exception $e) {
-        $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-           $e,
-           'Error: Task was terminated',
-           FlashMessage::ERROR,
-           TRUE
-        );
-
-        $flashMessageService = $objectManager->get(FlashMessageService::class);
-        $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-        $messageQueue->addMessage($message);
-      }
-    }
-
-    public function taskParseXMLPersons() {
-      try {
-        $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-        $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
-        $this->initTSFE($this->getRootpage($objectManager));
-        $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
-        $check = file_exists($this->dir.'/scheduler.txt');
-        if($check) {
-          $taskExists = file_exists($this->dir.'/task.txt');
-          if($taskExists) {
-            $taskString = file_get_contents ( $this->dir.'/task.txt' );
-            $taskCols = explode("|", $taskString);
-            if((int)$taskCols[0] == 4) {
-              $schedulerString = file_get_contents ( $this->dir.'/scheduler.txt' );
-              $schedulerCols = explode("|", $schedulerString);
-              $fileName = $schedulerCols[0];
-              $this->key = $schedulerCols[1];
-              $uniqid = $schedulerCols[2];
-              $this->xml = new \XMLReader();
-              $this->xml->open($fileName);
-              $xmlstring = implode("", file($fileName));
-              $xml = simplexml_load_string($xmlstring);
-              $json = json_encode($xml);
-              $array = json_decode($json,TRUE);
-              $contents = var_export($array, true);
-              $xmlObj = new \SimpleXMLElement($xmlstring);
-              try {
-                if ( is_array( $array['Persons']['Person'] ) ) {
-                  $personsCount = count($array['Persons']['Person']);
-                  $this->truncateDatabase('tx_nwcitavi_domain_model_personhash');
-                  for($i = 0; $i < $personsCount; $i++) {
-                    if($array['Persons']['Person']['@attributes']) {
-                      $person = $array['Persons']['Person'];
-                    } else {
-                      $person = $array['Persons']['Person'][$i];
-                    }
-
-                    if(strlen($person['@attributes']['ID']) > 0) {
-                      $refstr = $this->generatedHash($person);
-                      $this->hash = hash("md5", $refstr);
-                      $this->insertInHashTable('PersonHashRepository', 'PersonHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
-                      $columnExists = $this->columnExists('PersonRepository', $person['@attributes']['ID'], 'tx_nwcitavi_domain_model_person');
-
-                      $this->setDatabase($person, 'Person', $columnExists, $settings);
-                    }
-                    unset($person, $personAttributes, $db_person, $personUid);
-                  }
-                  $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_person', 'tx_nwcitavi_domain_model_personhash', $settings);
-                  file_put_contents($this->dir.'/task.txt', 5);
-                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                     'The persons have been created successfully',
-                     'Successful',
-                     FlashMessage::OK,
-                     TRUE
-                  );
-                } else {
-                  file_put_contents($this->dir.'/task.txt', 5);
-                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                     'No persons to create',
-                     'Info',
-                     FlashMessage::INFO,
-                     TRUE
-                  );
-                }
-
-                $flashMessageService = $objectManager->get(FlashMessageService::class);
-                $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-                $messageQueue->addMessage($message);
-              } catch (Exception $e) {
-                $this->logRepository->addLog(1, 'Persons could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                   $e,
-                   'Error: Persons could not be generated',
-                   FlashMessage::ERROR,
-                   TRUE
-                );
-
-                $flashMessageService = $objectManager->get(FlashMessageService::class);
-                $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-                $messageQueue->addMessage($message);
-              }
-              $this->xml->close();
-            } else {
-              $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                 'Task parse persons is not your turn',
-                 'Waiting',
-                 FlashMessage::WARNING,
-                 TRUE
-              );
-
-              $flashMessageService = $objectManager->get(FlashMessageService::class);
-              $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-              $messageQueue->addMessage($message);
-            }
-          }
-        }
-      } catch (Exception $e) {
-        $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-           $e,
-           'Error: Task was terminated',
-           FlashMessage::ERROR,
-           TRUE
-        );
-
-        $flashMessageService = $objectManager->get(FlashMessageService::class);
-        $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-        $messageQueue->addMessage($message);
-      }
-    }
-
-    public function taskParseXMLPublishers() {
-      try {
-        $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-        $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
-        $this->initTSFE($this->getRootpage($objectManager));
-        $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
-        $check = file_exists($this->dir.'/scheduler.txt');
-        if($check) {
-          $taskExists = file_exists($this->dir.'/task.txt');
-          if($taskExists) {
-            $taskString = file_get_contents ( $this->dir.'/task.txt' );
-            $taskCols = explode("|", $taskString);
-            if((int)$taskCols[0] == 5) {
-              $schedulerString = file_get_contents ( $this->dir.'/scheduler.txt' );
-              $schedulerCols = explode("|", $schedulerString);
-              $fileName = $schedulerCols[0];
-              $this->key = $schedulerCols[1];
-              $uniqid = $schedulerCols[2];
-              $this->xml = new \XMLReader();
-              $this->xml->open($fileName);
-              $xmlstring = implode("", file($fileName));
-              $xml = simplexml_load_string($xmlstring);
-              $json = json_encode($xml);
-              $array = json_decode($json,TRUE);
-              $contents = var_export($array, true);
-              $xmlObj = new \SimpleXMLElement($xmlstring);
-              try {
-                if ( is_array( $array['Publishers']['Publisher'] ) ) {
-                  $publishersCount = count($array['Publishers']['Publisher']);
-                  $this->truncateDatabase('tx_nwcitavi_domain_model_publisherhash');
-                  for($i = 0; $i < $publishersCount; $i++) {
-                    if($array['Publishers']['Publisher']['@attributes']) {
-                      $publisher = $array['Publishers']['Publisher'];
-                    } else {
-                      $publisher = $array['Publishers']['Publisher'][$i];
-                    }
-
-                    if(strlen($publisher['@attributes']['ID']) > 0) {
-                      $refstr = $this->generatedHash($publisher);
-                      $this->hash = hash("md5", $refstr);
-                      $this->insertInHashTable('PublisherHashRepository', 'PublisherHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
-                      $columnExists = $this->columnExists('PublisherRepository', $publisher['@attributes']['ID'], 'tx_nwcitavi_domain_model_publisher');
-
-                      $this->setDatabase($publisher, 'Publisher', $columnExists, $settings);
-                    }
-                    unset($publisher, $publisherAttributes, $db_publisher, $publisherUid);
-                  }
-                  $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_publisher', 'tx_nwcitavi_domain_model_publisherhash', $settings);
-                  file_put_contents($this->dir.'/task.txt', 6);
-                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                     'The publishers have been created successfully',
-                     'Successful',
-                     FlashMessage::OK,
-                     TRUE
-                  );
-                } else {
-                  file_put_contents($this->dir.'/task.txt', 6);
-                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                     'No publishers to create',
-                     'Info',
-                     FlashMessage::INFO,
-                     TRUE
-                  );
-                }
-
-                $flashMessageService = $objectManager->get(FlashMessageService::class);
-                $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-                $messageQueue->addMessage($message);
-              } catch (Exception $e) {
-                $this->logRepository->addLog(1, 'Publishers could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                   $e,
-                   'Error: Publishers could not be generated',
-                   FlashMessage::ERROR,
-                   TRUE
-                );
-
-                $flashMessageService = $objectManager->get(FlashMessageService::class);
-                $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-                $messageQueue->addMessage($message);
-              }
-              $this->xml->close();
-            } else {
-              $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                 'Task parse publishers is not your turn',
-                 'Waiting',
-                 FlashMessage::WARNING,
-                 TRUE
-              );
-
-              $flashMessageService = $objectManager->get(FlashMessageService::class);
-              $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-              $messageQueue->addMessage($message);
-            }
-          }
-        }
-      } catch (Exception $e) {
-        $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-           $e,
-           'Error: Task was terminated',
-           FlashMessage::ERROR,
-           TRUE
-        );
-
-        $flashMessageService = $objectManager->get(FlashMessageService::class);
-        $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-        $messageQueue->addMessage($message);
-      }
-    }
-
-    public function taskParseXMLSeriestitles() {
-      try {
-        $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-        $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
-        $this->initTSFE($this->getRootpage($objectManager));
-        $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
-        $check = file_exists($this->dir.'/scheduler.txt');
-        if($check) {
-          $taskExists = file_exists($this->dir.'/task.txt');
-          if($taskExists) {
-            $taskString = file_get_contents ( $this->dir.'/task.txt' );
-            $taskCols = explode("|", $taskString);
-            if((int)$taskCols[0] == 6) {
-              $schedulerString = file_get_contents ( $this->dir.'/scheduler.txt' );
-              $schedulerCols = explode("|", $schedulerString);
-              $fileName = $schedulerCols[0];
-              $this->key = $schedulerCols[1];
-              $uniqid = $schedulerCols[2];
-              $this->xml = new \XMLReader();
-              $this->xml->open($fileName);
-              $xmlstring = implode("", file($fileName));
-              $xml = simplexml_load_string($xmlstring);
-              $json = json_encode($xml);
-              $array = json_decode($json,TRUE);
-              $contents = var_export($array, true);
-              $xmlObj = new \SimpleXMLElement($xmlstring);
-              try {
-                if ( is_array( $array['SeriesTitles']['SeriesTitle'] ) ) {
-                  $seriestitlesCount = count($array['SeriesTitles']['SeriesTitle']);
-                  $this->truncateDatabase('tx_nwcitavi_domain_model_seriestitlehash');
-                  for($i = 0; $i < $seriestitlesCount; $i++) {
-                    if($array['SeriesTitles']['SeriesTitle']['@attributes']) {
-                      $seriestitle = $array['SeriesTitles']['SeriesTitle'];
-                    } else {
-                      $seriestitle = $array['SeriesTitles']['SeriesTitle'][$i];
-                    }
-
-                    if(strlen($seriestitle['@attributes']['ID']) > 0) {
-                      $refstr = $this->generatedHash($seriestitle);
-                      $this->hash = hash("md5", $refstr);
-                      $this->insertInHashTable('SeriestitleHashRepository', 'SeriestitleHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
-                      $columnExists = $this->columnExists('SeriestitleRepository', $seriestitle['@attributes']['ID'], 'tx_nwcitavi_domain_model_seriestitle');
-
-                      $this->setDatabase($seriestitle, 'SeriesTitle', $columnExists, $settings);
-                    }
-                    unset($seriestitle, $seriestitleAttributes, $db_seriestitle, $seriestitleUid);
-                  }
-                  $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_seriestitle', 'tx_nwcitavi_domain_model_seriestitlehash', $settings);
-                  file_put_contents($this->dir.'/task.txt', 7);
-                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                     'The seriestitles have been created successfully',
-                     'Successful',
-                     FlashMessage::OK,
-                     TRUE
-                  );
-                } else {
-                  file_put_contents($this->dir.'/task.txt', 7);
-                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                     'No seriestitles to create',
-                     'Info',
-                     FlashMessage::INFO,
-                     TRUE
-                  );
-                }
-
-                $flashMessageService = $objectManager->get(FlashMessageService::class);
-                $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-                $messageQueue->addMessage($message);
-              } catch (Exception $e) {
-                $this->logRepository->addLog(1, 'Seriestitles could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                   $e,
-                   'Error: Seriestitles could not be generated',
-                   FlashMessage::ERROR,
-                   TRUE
-                );
-
-                $flashMessageService = $objectManager->get(FlashMessageService::class);
-                $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-                $messageQueue->addMessage($message);
-              }
-              $this->xml->close();
-            } else {
-              $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                 'Task parse publishers is not your turn',
-                 'Waiting',
-                 FlashMessage::WARNING,
-                 TRUE
-              );
-
-              $flashMessageService = $objectManager->get(FlashMessageService::class);
-              $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-              $messageQueue->addMessage($message);
-            }
-          }
-        }
-      } catch (Exception $e) {
-        $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-           $e,
-           'Error: Task was terminated',
-           FlashMessage::ERROR,
-           TRUE
-        );
-
-        $flashMessageService = $objectManager->get(FlashMessageService::class);
-        $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-        $messageQueue->addMessage($message);
-      }
-    }
-
-    public function taskParseXMLKnowledgeitems() {
-      try {
-        $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-        $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
-        $this->initTSFE($this->getRootpage($objectManager));
-        $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
-        $check = file_exists($this->dir.'/scheduler.txt');
-        if($check) {
-          $taskExists = file_exists($this->dir.'/task.txt');
-          if($taskExists) {
-            $taskString = file_get_contents ( $this->dir.'/task.txt' );
-            $taskCols = explode("|", $taskString);
-            if((int)$taskCols[0] == 7) {
-              $schedulerString = file_get_contents ( $this->dir.'/scheduler.txt' );
-              $schedulerCols = explode("|", $schedulerString);
-              $fileName = $schedulerCols[0];
-              $this->key = $schedulerCols[1];
-              $uniqid = $schedulerCols[2];
-              $this->xml = new \XMLReader();
-              $this->xml->open($fileName);
-              $xmlstring = implode("", file($fileName));
-              $xml = simplexml_load_string($xmlstring);
-              $json = json_encode($xml);
-              $array = json_decode($json,TRUE);
-              $contents = var_export($array, true);
-              $xmlObj = new \SimpleXMLElement($xmlstring);
-              try {
-                if ( is_array( $array['Thoughts']['KnowledgeItem'] ) ) {
-                  $knowledgeitemsCount = count($array['Thoughts']['KnowledgeItem']);
-                  $this->truncateDatabase('tx_nwcitavi_domain_model_knowledgeitemhash');
-                  for($i = 0; $i < $knowledgeitemsCount; $i++) {
-                    if($array['Thoughts']['KnowledgeItem']['@attributes']) {
-                      $knowledgeitem = $array['Thoughts']['KnowledgeItem'];
-                    } else {
-                      $knowledgeitem = $array['Thoughts']['KnowledgeItem'][$i];
-                    }
-
-                    if(strlen($knowledgeitem['@attributes']['ID']) > 0) {
-                      $refstr = $this->generatedHash($knowledgeitem);
-                      $this->hash = hash("md5", $refstr);
-                      $this->insertInHashTable('KnowledgeItemHashRepository', 'KnowledgeItemHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
-                      $columnExists = $this->columnExists('KnowledgeItemRepository', $knowledgeitem['@attributes']['ID'], 'tx_nwcitavi_domain_model_knowledgeitem');
-
-                      $this->setDatabase($seriestitle, 'KnowledgeItem', $columnExists, $settings);
-                    }
-                    unset($knowledgeitem, $knowledgeitemAttributes, $db_knowledgeitem, $knowledgeitemUid);
-                  }
-                  $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_knowledgeitem', 'tx_nwcitavi_domain_model_knowledgeitemhash', $settings);
-                  file_put_contents($this->dir.'/task.txt', 8);
-                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                     'The knowledgeitems have been created successfully',
-                     'Successful',
-                     FlashMessage::OK,
-                     TRUE
-                  );
-                } else {
-                  file_put_contents($this->dir.'/task.txt', 8);
-                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                     'No knowledgeitems to create',
-                     'Info',
-                     FlashMessage::INFO,
-                     TRUE
-                  );
-                }
-
-                $flashMessageService = $objectManager->get(FlashMessageService::class);
-                $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-                $messageQueue->addMessage($message);
-              } catch (Exception $e) {
-                $this->logRepository->addLog(1, 'Knowledgeitems could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                   $e,
-                   'Error: Knowledgeitems could not be generated',
-                   FlashMessage::ERROR,
-                   TRUE
-                );
-
-                $flashMessageService = $objectManager->get(FlashMessageService::class);
-                $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-                $messageQueue->addMessage($message);
-              }
-              $this->xml->close();
-            } else {
-              $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                 'Task parse publishers is not your turn',
-                 'Waiting',
-                 FlashMessage::WARNING,
-                 TRUE
-              );
-
-              $flashMessageService = $objectManager->get(FlashMessageService::class);
-              $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-              $messageQueue->addMessage($message);
-            }
-          }
-        }
-      } catch (Exception $e) {
-        $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-           $e,
-           'Error: Task was terminated',
-           FlashMessage::ERROR,
-           TRUE
-        );
-
-        $flashMessageService = $objectManager->get(FlashMessageService::class);
-        $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-        $messageQueue->addMessage($message);
-      }
-    }
-
-    public function taskParseXMLReferences() {
-      try {
-        $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-        $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
-        $this->initTSFE($this->getRootpage($objectManager));
-        $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
-        $check = file_exists($this->dir.'/scheduler.txt');
-        if($check) {
-          $taskExists = file_exists($this->dir.'/task.txt');
-          if($taskExists) {
-            $taskString = file_get_contents ( $this->dir.'/task.txt' );
-            $taskCols = explode("|", $taskString);
-            if((int)$taskCols[0] == 8) {
-              $schedulerString = file_get_contents ( $this->dir.'/scheduler.txt' );
-              $schedulerCols = explode("|", $schedulerString);
-              $fileName = $schedulerCols[0];
-              $this->key = $schedulerCols[1];
-              $uniqid = $schedulerCols[2];
-              $this->xml = new \XMLReader();
-              $this->xml->open($fileName);
-              $xmlstring = implode("", file($fileName));
-              $xml = simplexml_load_string($xmlstring);
-              $json = json_encode($xml);
-              $array = json_decode($json,TRUE);
-              $contents = var_export($array, true);
-              $xmlObj = new \SimpleXMLElement($xmlstring);
-              try {
-                if ( is_array( $array['References']['Reference'] ) ) {
-                  $refCount = count($array['References']['Reference']);
-                  $this->truncateDatabase('tx_nwcitavi_domain_model_referencehash');
-                  for($i = 0; $i < $refCount; $i++) {
-                    if($array['References']['Reference']['@attributes']) {
-                      $ref = $array['References']['Reference'];
-                    } else {
-                      $ref = $array['References']['Reference'][$i];
-                    }
-
-                    switch($ref['@attributes']['ReferenceType']) {
-                      case 'BookEdited';
-                        $this->sortDate = $ref['Year'];
-                        break;
-                      case 'Book';
-                        $this->sortDate = $ref['Year'];
-                        break;
-                      case 'JournalArticle';
-                        $this->sortDate = $ref['Year'];
-                        break;
-                      case 'NewspaperArticle';
-                        $this->sortDate = $ref['Date'];
-                        break;
-                      case 'PersonalCommunication';
-                        $this->sortDate = $ref['Date'];
-                        break;
-                      case 'Unknown';
-                        $this->sortDate = (!empty($ref['Date'])) ? $ref['Date'] : $ref['Year'];
-                        break;
-                      case 'UnpublishedWork';
-                        $this->sortDate = $ref['Date'];
-                        break;
-                      case 'ConferenceProceedings';
-                        $this->sortDate = $ref['Year'];
-                        break;
-                      case 'Contribution';
-                        $db_parentref = $this->checkIfEntryExists('tx_nwcitavi_domain_model_reference', 'citavi_id', $ref['ParentReferenceID']);
-                        $this->sortDate = $db_parentref['sort_date'];
-                        break;
-                      case 'Lecture';
-                        $this->sortDate = $ref['Date'];
-                        break;
-                      case 'PressRelease';
-                        $this->sortDate = $ref['Date'];
-                        break;
-                      case 'SpecialIssue';
-                        $this->sortDate = $ref['Year'];
-                        break;
-                      case 'Thesis';
-                        $this->sortDate = $ref['Date'];
-                        break;
-                      case 'InternetDocument';
-                        $this->sortDate = $ref['Year'];
-                        break;
-                      default:
-                        $this->sortDate = $ref['Date'];
-                    }
-                    if(strlen($ref['ParentReferenceID']) > 0) {
-                      $parent = $xmlObj->xpath("//Reference[@ID='".$ref['ParentReferenceID']."']");
-                      $this->parentReferenceType = (string)$parent[0]['ReferenceType'];
-                      $this->db_parentref = $this->checkIfEntryExists('tx_nwcitavi_domain_model_reference', 'citavi_id', $ref['ParentReferenceID']);
-                      $this->sortDate = $db_parentref['sort_date'];
-                    }
-                    if(strlen($ref['@attributes']['ID']) > 0) {
-                      $refstr = $this->generatedHash($ref);
-                      $this->hash = hash("md5", $refstr);
-                      $this->insertInHashTable('ReferenceHashRepository', 'ReferenceHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
-                      $columnExists = $this->columnExists('ReferenceRepository', $ref['@attributes']['ID'], 'tx_nwcitavi_domain_model_reference');
-
-                      $this->setDatabase($ref, 'Reference', $columnExists, $settings);
-                    }
-                    unset($ref, $refAttributes, $db_ref, $refUid);
-                  }
-                  $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_reference', 'tx_nwcitavi_domain_model_referencehash', $settings);
-                  file_put_contents($this->dir.'/task.txt', 9);
-                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                     'The references have been created successfully',
-                     'Successful',
-                     FlashMessage::OK,
-                     TRUE
-                  );
-                } else {
-                  file_put_contents($this->dir.'/task.txt', 9);
-                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                     'No references to create',
-                     'Info',
-                     FlashMessage::INFO,
-                     TRUE
-                  );
-                }
-
-                $flashMessageService = $objectManager->get(FlashMessageService::class);
-                $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-                $messageQueue->addMessage($message);
-              } catch (Exception $e) {
-                $this->logRepository->addLog(1, 'References could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                   $e,
-                   'Error: References could not be generated',
-                   FlashMessage::ERROR,
-                   TRUE
-                );
-
-                $flashMessageService = $objectManager->get(FlashMessageService::class);
-                $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-                $messageQueue->addMessage($message);
-              }
-              $this->xml->close();
-            } else {
-              $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                 'Task parse publishers is not your turn',
-                 'Waiting',
-                 FlashMessage::WARNING,
-                 TRUE
-              );
-
-              $flashMessageService = $objectManager->get(FlashMessageService::class);
-              $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-              $messageQueue->addMessage($message);
-            }
-          }
-        }
-      } catch (Exception $e) {
-        $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-           $e,
-           'Error: Task was terminated',
-           FlashMessage::ERROR,
-           TRUE
-        );
-
-        $flashMessageService = $objectManager->get(FlashMessageService::class);
-        $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-        $messageQueue->addMessage($message);
-      }
-    }
-
-    public function taskParseXMLLocations() {
-      try {
-        $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-        $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
-        $this->initTSFE($this->getRootpage($objectManager));
-        $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
-        $check = file_exists($this->dir.'/scheduler.txt');
-        if($check) {
-          $taskExists = file_exists($this->dir.'/task.txt');
-          if($taskExists) {
-            $taskString = file_get_contents ( $this->dir.'/task.txt' );
-            $taskCols = explode("|", $taskString);
-            if((int)$taskCols[0] == 9) {
-              $schedulerString = file_get_contents ( $this->dir.'/scheduler.txt' );
-              $schedulerCols = explode("|", $schedulerString);
-              $fileName = $schedulerCols[0];
-              $this->key = $schedulerCols[1];
-              $uniqid = $schedulerCols[2];
-              $this->xml = new \XMLReader();
-              $this->xml->open($fileName);
-              $xmlstring = implode("", file($fileName));
-              $xml = simplexml_load_string($xmlstring);
-              $json = json_encode($xml);
-              $array = json_decode($json,TRUE);
-              $contents = var_export($array, true);
-              $xmlObj = new \SimpleXMLElement($xmlstring);
-              try {
-                if ( is_array( $array['References']['Reference'] ) ) {
-                  $refCount = count($array['References']['Reference']);
-                  $this->truncateDatabase('tx_nwcitavi_domain_model_locationhash');
-                  for($i = 0; $i < $refCount; $i++) {
-                    if($array['References']['Reference']['@attributes']) {
-                      $ref = $array['References']['Reference'];
-                    } else {
-                      $ref = $array['References']['Reference'][$i];
-                    }
-
-                    if(strlen($ref['@attributes']['ID']) > 0) {
-                      // Locations speichern
-                      if($array['References']['Reference'][$i]['Locations']['Location']['@attributes']) {
-                        $location = $array['References']['Reference'][$i]['Locations']['Location'];
-                        if(strlen($location['@attributes']['ID']) > 0) {
-                          $locationstr = $this->generatedHash($location);
-                          $this->hash = hash("md5", $locationstr);
-                          $this->insertInHashTable('LocationHashRepository', 'LocationHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
-                          $columnExists = $this->columnExists('LocationRepository', $location['@attributes']['ID'], 'tx_nwcitavi_domain_model_location');
-
-                          $this->setDatabase($location, 'Location', $columnExists, $settings);
-
-                          // Location verknüpfen
-                          $this->updateReferenceLocation($ref, $location['@attributes']['ID']);
-
-                          //Libraries verknüpfen
-                          if(strlen($array['References']['Reference'][$i]['Locations']['Location']['LibraryID']) > 0) {
-                            $this->updateLocationLibrary($location['@attributes']['ID'], $array['References']['Reference'][$i]['Locations']['Location']['LibraryID']);
-                          }
+    /**
+     * Parse the categories xml data for the database
+     */
+    public function taskParseXMLCategories(): void
+    {
+        $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
+        $uniqueId = null;
+        $key = null;
+        try {
+            $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload');
+            //$this->initTSFE($this->getRootpage($objectManager));
+            //DebuggerUtility::var_dump($fullTs);
+            $configurationManager = $objectManager->get(ConfigurationManager::class);
+            $fullTs = $configurationManager->getConfiguration(ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT);
+            $settings = $fullTs['plugin.']['tx_nwcitavi.']['settings.'];
+            $check = file_exists($dir.'/scheduler.txt');
+            if($check && (int)$settings['sPid'] > 0) {
+                $taskExists = file_exists($dir.'/task.txt');
+                if(!$taskExists) {
+                    $schedulerString = file_get_contents ( $dir.'/scheduler.txt' );
+                    $schedulerCols = explode('|', $schedulerString);
+                    [$fileName, $key, $uniqueId] = $schedulerCols;
+                    $xml = new \XMLReader();
+                    $xml->open($fileName);
+                    $xmlString = implode('', file($fileName));
+                    $xml = simplexml_load_string($xmlString);
+                    $json = json_encode($xml);
+                    $array = json_decode($json,TRUE);
+                    $level = 0;
+                    try {
+                        if ( is_array( $array['Categories']['Category'] ) ) {
+                            $this->truncateDatabase('tx_nwcitavi_domain_model_categoryhash');
+                            $this->parseCategories($level, $array, $settings, $key, $uniqueId);
+                            file_put_contents($dir.'/task.txt', 1);
+                        } else {
+                        	file_put_contents($dir.'/task.txt', 1);
                         }
-                        unset($location, $locationAttributes, $db_location, $locationUid);
-                      } else {
-                        if ( is_array( $array['References']['Reference'][$i]['Locations']['Location'] ) ) {
-                          $locationsCount = count($array['References']['Reference'][$i]['Locations']['Location']);
-                          for($j = 0; $j < $locationsCount; $j++) {
-                            $location = $array['References']['Reference'][$i]['Locations']['Location'][$j];
-                            if(strlen($location['@attributes']['ID']) > 0) {
-                              $locationstr = $this->generatedHash($location);
-                              $this->hash = hash("md5", $locationstr);
-                              $this->insertInHashTable('LocationHashRepository', 'LocationHash', $this->hash, ($settings['sPid']) ? $settings['sPid'] : '0');
-                              $columnExists = $this->columnExists('LocationRepository', $location['@attributes']['ID'], 'tx_nwcitavi_domain_model_location');
+                    } catch (Exception $e) {
+                        $this->logRepository->addLog(1, 'Categories could not be generated. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+        }
+    }
 
-                              $this->setDatabase($location, 'Location', $columnExists, $settings);
-
-                              // Location verknüpfen
-                              $this->updateReferenceLocation($ref, $location['@attributes']['ID']);
-
-                              //Libraries verknüpfen
-                              if(strlen($array['References']['Reference'][$i]['Locations']['Location'][$j]['LibraryID']) > 0) {
-                                $this->updateLocationLibrary($location['@attributes']['ID'], $array['References']['Reference'][$i]['Locations']['Location'][$j]['LibraryID']);
-                              }
+    /**
+     * Parse the keywords xml data for the database
+     */
+    public function taskParseXMLKeywords(): void
+    {
+        $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
+        $uniqueId = null;
+        $key = null;
+        try {
+            $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+            //$this->initTSFE($this->getRootpage($objectManager));
+            //$settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
+            $configurationManager = $objectManager->get(ConfigurationManager::class);
+            $fullTs = $configurationManager->getConfiguration(ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT);
+            $settings = $fullTs['plugin.']['tx_nwcitavi.']['settings.'];
+            $check = file_exists($dir.'/scheduler.txt');
+            if($check) {
+                $taskExists = file_exists($dir.'/task.txt');
+                if($taskExists) {
+                    $taskString = file_get_contents ( $dir.'/task.txt' );
+                    $taskCols = explode('|', $taskString);
+                    if((int)$taskCols[0] === 1) {
+                        $schedulerString = file_get_contents ( $dir.'/scheduler.txt' );
+                        $schedulerCols = explode('|', $schedulerString);
+                        [$fileName, $key, $uniqueId] = $schedulerCols;
+                        $xml = new \XMLReader();
+                        $xml->open($fileName);
+                        $xmlString = implode('', file($fileName));
+                        $xml = simplexml_load_string($xmlString);
+                        $json = json_encode($xml);
+                        $array = json_decode($json,TRUE);
+                        try {
+                            if ( is_array( $array['Keywords']['Keyword'] ) ) {
+                                $this->truncateDatabase('tx_nwcitavi_domain_model_keywordhash');
+                                foreach ($array['Keywords']['Keyword'] as $iValue) {
+                                    if($array['Keywords']['Keyword']['@attributes']) {
+                                        $keyword = $array['Keywords']['Keyword'];
+                                    } else {
+                                        $keyword = $iValue;
+                                    }
+                                    if(!empty($keyword['@attributes']['ID'])) {
+                                        $refStr = $this->generatedHash($keyword);
+                                        $hash = hash('md5', $refStr);
+                                        $this->insertInHashTable( 'KeywordHash', $hash, ($settings['sPid']) ?: '0');
+                                        $columnExists = $this->columnExists('KeywordRepository', $keyword['@attributes']['ID'], 'tx_nwcitavi_domain_model_keyword');
+                                        $this->setDatabase($keyword, 'Keyword', $columnExists, $hash, $key, $uniqueId, $settings);
+                                    }
+                                    unset($keyword, $keywordAttributes, $db_keyword, $keywordUid);
+                                }
+                                $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_keyword', 'tx_nwcitavi_domain_model_keywordhash', $settings);
+                                file_put_contents($dir.'/task.txt', 2);
+                            } else {
+                                file_put_contents($dir.'/task.txt', 2);
                             }
-                          }
+                        } catch (Exception $e) {
+                            $this->logRepository->addLog(1, 'Keywords could not be generated. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
                         }
-                        unset($location, $locationAttributes, $db_location, $locationUid);
-                      }
                     }
-                    unset($ref, $refAttributes, $db_ref, $refUid);
-                  }
-                  $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_location', 'tx_nwcitavi_domain_model_locationhash', $settings);
-                  file_put_contents($this->dir.'/task.txt', 10);
-                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                     'The locations have been created successfully',
-                     'Successful',
-                     FlashMessage::OK,
-                     TRUE
-                  );
-                } else {
-                  file_put_contents($this->dir.'/task.txt', 10);
-                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                     'No locations to create',
-                     'Info',
-                     FlashMessage::INFO,
-                     TRUE
-                  );
                 }
-
-                $flashMessageService = $objectManager->get(FlashMessageService::class);
-                $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-                $messageQueue->addMessage($message);
-              } catch (Exception $e) {
-                $this->logRepository->addLog(1, 'Locations could not be generated. Fehler: '.$e, 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-                $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                   $e,
-                   'Error: Locations could not be generated',
-                   FlashMessage::ERROR,
-                   TRUE
-                );
-
-                $flashMessageService = $objectManager->get(FlashMessageService::class);
-                $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-                $messageQueue->addMessage($message);
-              }
-              $this->xml->close();
-            } else {
-              $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                 'Task parse publishers is not your turn',
-                 'Waiting',
-                 FlashMessage::WARNING,
-                 TRUE
-              );
-
-              $flashMessageService = $objectManager->get(FlashMessageService::class);
-              $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-              $messageQueue->addMessage($message);
             }
-          }
+        } catch (Exception $e) {
+            $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
         }
-      } catch (Exception $e) {
-        $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-           $e,
-           'Error: Task was terminated',
-           FlashMessage::ERROR,
-           TRUE
-        );
-
-        $flashMessageService = $objectManager->get(FlashMessageService::class);
-        $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-        $messageQueue->addMessage($message);
-      }
     }
 
-    public function taskParseXMLFiles() {
-      try {
-        $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-        $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
-        $this->initTSFE($this->getRootpage($objectManager));
-        $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
-        $check = file_exists($this->dir.'/scheduler.txt');
-        if($check) {
-          $taskExists = file_exists($this->dir.'/task.txt');
-          if($taskExists) {
-            $taskString = file_get_contents ( $this->dir.'/task.txt' );
-            $taskCols = explode("|", $taskString);
-            if((int)$taskCols[0] == 10) {
-              $schedulerString = file_get_contents ( $this->dir.'/scheduler.txt' );
-              $schedulerCols = explode("|", $schedulerString);
-              $fileName = $schedulerCols[0];
-              if($numEntries == 0) {
-                unlink($fileName);
-
-                if(file_exists($fileName)) {
-                  $this->logRepository->addLog(1, 'File "'.$fileName.'" could not be deleted', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task still working.', ''.$this->key.'', $settings['sPid']);
-                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                     'File "'.$fileName.'" could not be deleted',
-                     'Warning',
-                     FlashMessage::WARNING,
-                     TRUE
-                  );
-
-                  $flashMessageService = $objectManager->get(FlashMessageService::class);
-                  $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-                  $messageQueue->addMessage($message);
+    /**
+     * Parse the libraries xml data for the database
+     */
+    public function taskParseXMLLibraries(): void
+    {
+        $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
+        $uniqueId = null;
+        $key = null;
+        try {
+            $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+            //$this->initTSFE($this->getRootpage($objectManager));
+            //$settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
+            $configurationManager = $objectManager->get(ConfigurationManager::class);
+            $fullTs = $configurationManager->getConfiguration(ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT);
+            $settings = $fullTs['plugin.']['tx_nwcitavi.']['settings.'];
+            $check = file_exists($dir.'/scheduler.txt');
+            if($check) {
+                $taskExists = file_exists($dir.'/task.txt');
+                if($taskExists) {
+                    $taskString = file_get_contents ( $dir.'/task.txt' );
+                    $taskCols = explode('|', $taskString);
+                    if((int)$taskCols[0] === 2) {
+                        $schedulerString = file_get_contents ( $dir.'/scheduler.txt' );
+                        $schedulerCols = explode('|', $schedulerString);
+                        [$fileName, $key, $uniqueId] = $schedulerCols;
+                        $xml = new \XMLReader();
+                        $xml->open($fileName);
+                        $xmlString = implode('', file($fileName));
+                        $xml = simplexml_load_string($xmlString);
+                        $json = json_encode($xml);
+                        $array = json_decode($json,TRUE);
+                        try {
+                        	if ( is_array( $array['Libraries']['Library'] ) ) {
+                                $this->truncateDatabase('tx_nwcitavi_domain_model_libraryhash');
+                                foreach ($array['Libraries']['Library'] as $iValue) {
+                                    if($array['Libraries']['Library']['@attributes']) {
+                                        $library = $array['Libraries']['Library'];
+                                    } else {
+                                        $library = $iValue;
+                                    }
+                                    if(!empty($library['@attributes']['ID'])) {
+                                        $refStr = $this->generatedHash($library);
+                                        $hash = hash('md5', $refStr);
+                                        $this->insertInHashTable( 'LibraryHash', $hash, ($settings['sPid']) ?: '0');
+                                        $columnExists = $this->columnExists('LibraryRepository', $library['@attributes']['ID'], 'tx_nwcitavi_domain_model_library');
+                                        $this->setDatabase($library, 'Library', $columnExists, $hash, $key, $uniqueId, $settings);
+                                    }
+                                    unset($library, $libraryAttributes, $db_library, $libraryUid);
+                                }
+                                $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_library', 'tx_nwcitavi_domain_model_libraryhash', $settings);
+                                file_put_contents($dir.'/task.txt', 3);
+                        	} else {
+                        	    file_put_contents($dir.'/task.txt', 3);
+                        	}
+                        } catch (Exception $e) {
+                            $this->logRepository->addLog(1, 'Libraries could not be generated. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                        }
+                    }
                 }
-              }
-
-              // FileReference erstellen
-              $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/files/');
-              $filecheck = file_exists($this->dir.'/files.txt');
-              if($filecheck) {
-                $file = $this->dir.'/files.txt';
-                $file_handle = fopen($file, 'r');
-                while (!feof($file_handle)) {
-                  $line = fgets($file_handle);
-                  if($line != '') {
-                    $fileCols = explode("|", $line);
-                    $referenceId = $fileCols[0];
-                    $file = $fileCols[1];
-                    $fileType = $fileCols[2];
-                    $this->setFileReferences($referenceId, $file, $fileType, $settings);
-                  }
-                }
-                fclose($file_handle);
-                unlink($this->dir.'/files.txt');
-
-                if(file_exists($this->dir.'/files.txt')) {
-                  $this->logRepository->addLog(1, 'File "'.$this->dir.'/files.txt" could not be deleted', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task still working.', ''.$this->key.'', $settings['sPid']);
-                  $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                     'File "'.$this->dir.'/files.txt" could not be deleted',
-                     'Warning',
-                     FlashMessage::WARNING,
-                     TRUE
-                  );
-
-                  $flashMessageService = $objectManager->get(FlashMessageService::class);
-                  $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-                  $messageQueue->addMessage($message);
-                }
-              }
-              $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                 'The files have been created successfully',
-                 'Successful',
-                 FlashMessage::OK,
-                 TRUE
-              );
-
-              $flashMessageService = $objectManager->get(FlashMessageService::class);
-              $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-              $messageQueue->addMessage($message);
-
-              $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
-              file_put_contents($this->dir.'/task.txt', 11);
             }
-          }
+        } catch (Exception $e) {
+            $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
         }
-      } catch (Exception $e) {
-        $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqid.'', '[Citavi Parser]: Task was terminated.', ''.$this->key.'', $settings['sPid']);
-        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-           $e,
-           'Error: Task was terminated',
-           FlashMessage::ERROR,
-           TRUE
-        );
-
-        $flashMessageService = $objectManager->get(FlashMessageService::class);
-        $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-        $messageQueue->addMessage($message);
-      }
     }
 
+    /**
+     * Parse the periodicals xml data for the database
+     */
+    public function taskParseXMLPeriodicals(): void
+    {
+        $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
+        $uniqueId = null;
+        $key = null;
+        try {
+            $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+            //$this->initTSFE($this->getRootpage($objectManager));
+            //$settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
+            $configurationManager = $objectManager->get(ConfigurationManager::class);
+            $fullTs = $configurationManager->getConfiguration(ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT);
+            $settings = $fullTs['plugin.']['tx_nwcitavi.']['settings.'];
+            $check = file_exists($dir.'/scheduler.txt');
+            if($check) {
+                $taskExists = file_exists($dir.'/task.txt');
+                if($taskExists) {
+                    $taskString = file_get_contents ( $dir.'/task.txt' );
+                    $taskCols = explode('|', $taskString);
+                    if((int)$taskCols[0] === 3) {
+                        $schedulerString = file_get_contents ( $dir.'/scheduler.txt' );
+                        $schedulerCols = explode('|', $schedulerString);
+                        [$fileName, $key, $uniqueId] = $schedulerCols;
+                        $xml = new \XMLReader();
+                        $xml->open($fileName);
+                        $xmlString = implode('', file($fileName));
+                        $xml = simplexml_load_string($xmlString);
+                        $json = json_encode($xml);
+                        $array = json_decode($json,TRUE);
+                        try {
+                            if ( is_array( $array['Periodicals']['Periodical'] ) ) {
+                                $this->truncateDatabase('tx_nwcitavi_domain_model_periodicalhash');
+                                foreach ($array['Periodicals']['Periodical'] as $iValue) {
+                                    if($array['Periodicals']['Periodical']['@attributes']) {
+                                        $periodical = $array['Periodicals']['Periodical'];
+                                    } else {
+                                        $periodical = $iValue;
+                                    }
+                                    if(!empty($periodical['@attributes']['ID'])) {
+                                        $refStr = $this->generatedHash($periodical);
+                                        $hash = hash('md5', $refStr);
+                                        $this->insertInHashTable( 'PeriodicalHash', $hash, ($settings['sPid']) ?: '0');
+                                        $columnExists = $this->columnExists('PeriodicalRepository', $periodical['@attributes']['ID'], 'tx_nwcitavi_domain_model_periodical');
+                                        $this->setDatabase($periodical, 'Periodical', $columnExists, $hash, $key, $uniqueId, $settings);
+                                    }
+                                    unset($periodical, $periodicalAttributes, $db_periodical, $periodicalUid);
+                                }
+                                $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_periodical', 'tx_nwcitavi_domain_model_periodicalhash', $settings);
+                                file_put_contents($dir.'/task.txt', 4);
+                            } else {
+                                file_put_contents($dir.'/task.txt', 4);
+                            }
+                        } catch (Exception $e) {
+                            $this->logRepository->addLog(1, 'Periodicals could not be generated. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                        }
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+        }
+    }
+
+    /**
+     * Parse the persons xml data for the database
+     */
+    public function taskParseXMLPersons(): void
+    {
+        $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
+        $uniqueId = null;
+        $key = null;
+        try {
+            $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+            //$this->initTSFE($this->getRootpage($objectManager));
+            //$settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
+            $configurationManager = $objectManager->get(ConfigurationManager::class);
+            $fullTs = $configurationManager->getConfiguration(ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT);
+            $settings = $fullTs['plugin.']['tx_nwcitavi.']['settings.'];
+            $check = file_exists($dir.'/scheduler.txt');
+            if($check) {
+                $taskExists = file_exists($dir.'/task.txt');
+                if($taskExists) {
+                    $taskString = file_get_contents ( $dir.'/task.txt' );
+                    $taskCols = explode('|', $taskString);
+                    if((int)$taskCols[0] === 4) {
+                        $schedulerString = file_get_contents ( $dir.'/scheduler.txt' );
+                        $schedulerCols = explode('|', $schedulerString);
+                        [$fileName, $key, $uniqueId] = $schedulerCols;
+                        $xml = new \XMLReader();
+                        $xml->open($fileName);
+                        $xmlString = implode('', file($fileName));
+                        $xml = simplexml_load_string($xmlString);
+                        $json = json_encode($xml);
+                        $array = json_decode($json,TRUE);
+                        try {
+                            if ( is_array( $array['Persons']['Person'] ) ) {
+                                $this->truncateDatabase('tx_nwcitavi_domain_model_personhash');
+                                foreach ($array['Persons']['Person'] as $iValue) {
+                                    if($array['Persons']['Person']['@attributes']) {
+                                        $person = $array['Persons']['Person'];
+                                    } else {
+                                        $person = $iValue;
+                                    }
+                                    if(!empty($person['@attributes']['ID'])) {
+                                        $refStr = $this->generatedHash($person);
+                                        $hash = hash('md5', $refStr);
+                                        $this->insertInHashTable( 'PersonHash', $hash, ($settings['sPid']) ?: '0');
+                                        $columnExists = $this->columnExists('PersonRepository', $person['@attributes']['ID'], 'tx_nwcitavi_domain_model_person');
+                                        $this->setDatabase($person, 'Person', $columnExists, $hash, $key, $uniqueId, $settings);
+                                    }
+                                    unset($person, $personAttributes, $db_person, $personUid);
+                                }
+                                $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_person', 'tx_nwcitavi_domain_model_personhash', $settings);
+                                file_put_contents($dir.'/task.txt', 5);
+                            } else {
+                                file_put_contents($dir.'/task.txt', 5);
+                            }
+                        } catch (Exception $e) {
+                            $this->logRepository->addLog(1, 'Persons could not be generated. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                        }
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+        }
+    }
+
+    /**
+     * Parse the publishers xml data for the database
+     */
+    public function taskParseXMLPublishers(): void
+    {
+        $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
+        $uniqueId = null;
+        $key = null;
+        try {
+            $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+            $configurationManager = $objectManager->get(ConfigurationManager::class);
+            $fullTs = $configurationManager->getConfiguration(ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT);
+            $settings = $fullTs['plugin.']['tx_nwcitavi.']['settings.'];
+            //$this->initTSFE($this->getRootpage($objectManager));
+            //$settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
+            $check = file_exists($dir.'/scheduler.txt');
+            if($check) {
+                $taskExists = file_exists($dir.'/task.txt');
+                if($taskExists) {
+                    $taskString = file_get_contents ( $dir.'/task.txt' );
+                    $taskCols = explode('|', $taskString);
+                    if((int)$taskCols[0] === 5) {
+                        $schedulerString = file_get_contents ( $dir.'/scheduler.txt' );
+                        $schedulerCols = explode('|', $schedulerString);
+                        [$fileName, $key, $uniqueId] = $schedulerCols;
+                        $xml = new \XMLReader();
+                        $xml->open($fileName);
+                        $xmlString = implode('', file($fileName));
+                        $xml = simplexml_load_string($xmlString);
+                        $json = json_encode($xml);
+                        $array = json_decode($json,TRUE);
+                        try {
+                            if ( is_array( $array['Publishers']['Publisher'] ) ) {
+                                $this->truncateDatabase('tx_nwcitavi_domain_model_publisherhash');
+                                foreach ($array['Publishers']['Publisher'] as $iValue) {
+                                    if($array['Publishers']['Publisher']['@attributes']) {
+                                        $publisher = $array['Publishers']['Publisher'];
+                                    } else {
+                                        $publisher = $iValue;
+                                    }
+                                    if(!empty($publisher['@attributes']['ID'])) {
+                                        $refStr = $this->generatedHash($publisher);
+                                        $hash = hash('md5', $refStr);
+                                        $this->insertInHashTable( 'PublisherHash', $hash, ($settings['sPid']) ?: '0');
+                                        $columnExists = $this->columnExists('PublisherRepository', $publisher['@attributes']['ID'], 'tx_nwcitavi_domain_model_publisher');
+                                        $this->setDatabase($publisher, 'Publisher', $columnExists, $hash, $key, $uniqueId, $settings);
+                                    }
+                                    unset($publisher, $publisherAttributes, $db_publisher, $publisherUid);
+                                }
+                                $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_publisher', 'tx_nwcitavi_domain_model_publisherhash', $settings);
+                                file_put_contents($dir.'/task.txt', 6);
+                            } else {
+                                file_put_contents($dir.'/task.txt', 6);
+                            }
+                        } catch (Exception $e) {
+                            $this->logRepository->addLog(1, 'Publishers could not be generated. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                        }
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+        }
+    }
+
+    /**
+     * Parse the seriestitles xml data for the database
+     */
+    public function taskParseXMLSeriestitles(): void
+    {
+        $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
+        $uniqueId = null;
+        $key = null;
+        try {
+            $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+            //$this->initTSFE($this->getRootpage($objectManager));
+            //$settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
+            $configurationManager = $objectManager->get(ConfigurationManager::class);
+            $fullTs = $configurationManager->getConfiguration(ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT);
+            $settings = $fullTs['plugin.']['tx_nwcitavi.']['settings.'];
+            $check = file_exists($dir.'/scheduler.txt');
+            if($check) {
+                $taskExists = file_exists($dir.'/task.txt');
+                if($taskExists) {
+                    $taskString = file_get_contents ( $dir.'/task.txt' );
+                    $taskCols = explode('|', $taskString);
+                    if((int)$taskCols[0] === 6) {
+                        $schedulerString = file_get_contents ( $dir.'/scheduler.txt' );
+                        $schedulerCols = explode('|', $schedulerString);
+                        [$fileName, $key, $uniqueId] = $schedulerCols;
+                        $xml = new \XMLReader();
+                        $xml->open($fileName);
+                        $xmlString = implode('', file($fileName));
+                        $xml = simplexml_load_string($xmlString);
+                        $json = json_encode($xml);
+                        $array = json_decode($json,TRUE);
+                        try {
+                            if ( is_array( $array['SeriesTitles']['SeriesTitle'] ) ) {
+                                $this->truncateDatabase('tx_nwcitavi_domain_model_seriestitlehash');
+                                foreach ($array['SeriesTitles']['SeriesTitle'] as $iValue) {
+                                    if($array['SeriesTitles']['SeriesTitle']['@attributes']) {
+                                        $seriesTitle = $array['SeriesTitles']['SeriesTitle'];
+                                    } else {
+                                        $seriesTitle = $iValue;
+                                    }
+                                    if(!empty($seriesTitle['@attributes']['ID'])) {
+                                        $refStr = $this->generatedHash($seriesTitle);
+                                        $hash = hash('md5', $refStr);
+                                        $this->insertInHashTable( 'SeriestitleHash', $hash, ($settings['sPid']) ?: '0');
+                                        $columnExists = $this->columnExists('SeriestitleRepository', $seriesTitle['@attributes']['ID'], 'tx_nwcitavi_domain_model_seriestitle');
+                                        $this->setDatabase($seriesTitle, 'SeriesTitle', $columnExists, $hash, $key, $uniqueId, $settings);
+                                    }
+                                    unset($seriesTitle, $seriesTitleAttributes, $db_seriestitle, $seriestitleUid);
+                                }
+                                $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_seriestitle', 'tx_nwcitavi_domain_model_seriestitlehash', $settings);
+                                file_put_contents($dir.'/task.txt', 7);
+                            } else {
+                                file_put_contents($dir.'/task.txt', 7);
+                            }
+                        } catch (Exception $e) {
+                            $this->logRepository->addLog(1, 'Seriestitles could not be generated. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                        }
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+        }
+    }
+
+    /**
+     * Parse the knowledgeitems xml data for the database
+     */
+    public function taskParseXMLKnowledgeitems(): void
+    {
+        $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
+        $uniqueId = null;
+        $key = null;
+        try {
+            $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+            //$this->initTSFE($this->getRootpage($objectManager));
+            //$settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
+            $configurationManager = $objectManager->get(ConfigurationManager::class);
+            $fullTs = $configurationManager->getConfiguration(ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT);
+            $settings = $fullTs['plugin.']['tx_nwcitavi.']['settings.'];
+            $check = file_exists($dir.'/scheduler.txt');
+            if($check) {
+                $taskExists = file_exists($dir.'/task.txt');
+                if($taskExists) {
+                    $taskString = file_get_contents ( $dir.'/task.txt' );
+                    $taskCols = explode('|', $taskString);
+                    if((int)$taskCols[0] === 7) {
+                        $schedulerString = file_get_contents ( $dir.'/scheduler.txt' );
+                        $schedulerCols = explode('|', $schedulerString);
+                        [$fileName, $key, $uniqueId] = $schedulerCols;
+                        $xml = new \XMLReader();
+                        $xml->open($fileName);
+                        $xmlString = implode('', file($fileName));
+                        $xml = simplexml_load_string($xmlString);
+                        $json = json_encode($xml);
+                        $array = json_decode($json,TRUE);
+                        try {
+                            if ( is_array( $array['Thoughts']['KnowledgeItem'] ) ) {
+                                $this->truncateDatabase('tx_nwcitavi_domain_model_knowledgeitemhash');
+                                foreach ($array['Thoughts']['KnowledgeItem'] as $iValue) {
+                                    if($array['Thoughts']['KnowledgeItem']['@attributes']) {
+                                        $knowledgeItem = $array['Thoughts']['KnowledgeItem'];
+                                    } else {
+                                        $knowledgeItem = $iValue;
+                                    }
+                                    if(!empty($knowledgeItem['@attributes']['ID'])) {
+                                        $refStr = $this->generatedHash($knowledgeItem);
+                                        $hash = hash('md5', $refStr);
+                                        $this->insertInHashTable( 'KnowledgeItemHash', $hash, ($settings['sPid']) ?: '0');
+                                        $columnExists = $this->columnExists('KnowledgeItemRepository', $knowledgeItem['@attributes']['ID'], 'tx_nwcitavi_domain_model_knowledgeitem');
+                                        $this->setDatabase($knowledgeItem, 'KnowledgeItem', $columnExists, $hash, $key, $uniqueId, $settings);
+                                    }
+                                    unset($knowledgeItem, $knowledgeItemAttributes, $dbKnowledgeItem, $knowledgeItemUid);
+                                }
+                                $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_knowledgeitem', 'tx_nwcitavi_domain_model_knowledgeitemhash', $settings);
+                                file_put_contents($dir.'/task.txt', 8);
+                            } else {
+                                file_put_contents($dir.'/task.txt', 8);
+                            }
+                        } catch (Exception $e) {
+                            $this->logRepository->addLog(1, 'Knowledgeitems could not be generated. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                        }
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+        }
+    }
+
+    /**
+     * Parse the references xml data for the database
+     */
+    public function taskParseXMLReferences(): void
+    {
+        $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
+        $uniqueId = null;
+        $key = null;
+        $dbParentRef = null;
+        try {
+            $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+            //$this->initTSFE($this->getRootpage($objectManager));
+            //$settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
+            $configurationManager = $objectManager->get(ConfigurationManager::class);
+            $fullTs = $configurationManager->getConfiguration(ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT);
+            $settings = $fullTs['plugin.']['tx_nwcitavi.']['settings.'];
+            $check = file_exists($dir.'/scheduler.txt');
+            if($check) {
+                $taskExists = file_exists($dir.'/task.txt');
+                if($taskExists) {
+                    $taskString = file_get_contents ( $dir.'/task.txt' );
+                    $taskCols = explode('|', $taskString);
+                    if((int)$taskCols[0] === 8) {
+                        $schedulerString = file_get_contents ( $dir.'/scheduler.txt' );
+                        $schedulerCols = explode('|', $schedulerString);
+                        [$fileName, $key, $uniqueId] = $schedulerCols;
+                        $xml = new \XMLReader();
+                        $xml->open($fileName);
+                        $xmlString = implode('', file($fileName));
+                        $xml = simplexml_load_string($xmlString);
+                        $json = json_encode($xml);
+                        $array = json_decode($json,TRUE);
+                        $xmlObj = new \SimpleXMLElement($xmlString);
+                        try {
+                            if ( is_array( $array['References']['Reference'] ) ) {
+                                $this->truncateDatabase('tx_nwcitavi_domain_model_referencehash');
+                                foreach ($array['References']['Reference'] as $iValue) {
+                                    if($array['References']['Reference']['@attributes']) {
+                                        $ref = $array['References']['Reference'];
+                                    } else {
+                                        $ref = $iValue;
+                                    }
+                                    switch($ref['@attributes']['ReferenceType']) {
+                                        case 'ConferenceProceedings':
+                                        case 'InternetDocument':
+                                        case 'BookEdited':
+                                        case 'Book':
+                                        case 'JournalArticle':
+                                        case 'SpecialIssue':
+                                            $ref['sortDate'] = $ref['Year'];
+                                            break;
+                                        case 'UnpublishedWork':
+                                        case 'NewspaperArticle':
+                                        case 'PersonalCommunication':
+                                        case 'Lecture':
+                                        case 'PressRelease':
+                                        case 'Thesis':
+                                            $ref['sortDate'] = $ref['Date'];
+                                            break;
+                                        case 'Unknown':
+                                            $ref['sortDate'] = (!empty($ref['Date'])) ? $ref['Date'] : $ref['Year'];
+                                            break;
+                                        case 'Contribution':
+                                            $dbParentRef = $this->checkIfEntryExists('tx_nwcitavi_domain_model_reference', 'citavi_id', $ref['ParentReferenceID']);
+                                            $ref['sortDate'] = $dbParentRef['sort_date'];
+                                            break;
+                                        default:
+                                            $ref['sortDate'] = $ref['Date'];
+                                    }
+                                    if(!empty($ref['ParentReferenceID'])) {
+                                        $parent = $xmlObj->xpath("//Reference[@ID='".$ref['ParentReferenceID']."']");
+                                        $ref['parentReferenceType'] = (string)$parent[0]['ReferenceType'];
+                                        $ref['dbParentRef']
+                                         = $this->checkIfEntryExists('tx_nwcitavi_domain_model_reference', 'citavi_id', $ref['ParentReferenceID']);
+                                        $ref['sortDate'] = $dbParentRef['sort_date'];
+                                    }
+                                    if(!empty($ref['@attributes']['ID'])) {
+                                        $refStr = $this->generatedHash($ref);
+                                        $hash = hash('md5', $refStr);
+                                        $this->insertInHashTable( 'ReferenceHash', $hash, ($settings['sPid']) ?: '0');
+                                        $columnExists = $this->columnExists('ReferenceRepository', $ref['@attributes']['ID'], 'tx_nwcitavi_domain_model_reference');
+                                        $this->setDatabase($ref, 'Reference', $columnExists, $hash, $key, $uniqueId, $settings);
+                                    }
+                                    unset($ref, $refAttributes, $db_ref, $refUid);
+                                }
+                                $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_reference', 'tx_nwcitavi_domain_model_referencehash', $settings);
+                                file_put_contents($dir.'/task.txt', 9);
+                            } else {
+                                file_put_contents($dir.'/task.txt', 9);
+                            }
+                        } catch (Exception $e) {
+                            $this->logRepository->addLog(1, 'References could not be generated. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                        }
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+        }
+    }
+
+    /**
+     * Parse the locations xml data for the database
+     */
+    public function taskParseXMLLocations(): void
+    {
+        $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
+        $uniqueId = null;
+        $key = null;
+        try {
+            $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+            //$this->initTSFE($this->getRootpage($objectManager));
+            //$settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
+            $configurationManager = $objectManager->get(ConfigurationManager::class);
+            $fullTs = $configurationManager->getConfiguration(ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT);
+            $settings = $fullTs['plugin.']['tx_nwcitavi.']['settings.'];
+            $check = file_exists($dir.'/scheduler.txt');
+            if($check) {
+                $taskExists = file_exists($dir.'/task.txt');
+                if($taskExists) {
+                    $taskString = file_get_contents ( $dir.'/task.txt' );
+                    $taskCols = explode('|', $taskString);
+                    if((int)$taskCols[0] === 9) {
+                        $schedulerString = file_get_contents ( $dir.'/scheduler.txt' );
+                        $schedulerCols = explode('|', $schedulerString);
+                        [$fileName, $key, $uniqueId] = $schedulerCols;
+                        $xml = new \XMLReader();
+                        $xml->open($fileName);
+                        $xmlString = implode('', file($fileName));
+                        $xml = simplexml_load_string($xmlString);
+                        $json = json_encode($xml);
+                        $array = json_decode($json,TRUE);
+                        try {
+                            if ( is_array( $array['References']['Reference'] ) ) {
+                                $this->truncateDatabase('tx_nwcitavi_domain_model_locationhash');
+                                foreach ($array['References']['Reference'] as $i => $iValue) {
+                                    if($array['References']['Reference']['@attributes']) {
+                                        $ref = $array['References']['Reference'];
+                                    } else {
+                                        $ref = $iValue;
+                                    }
+                                    if(!empty($ref['@attributes']['ID'])) {
+                                        // Locations speichern
+                                        if($iValue['Locations']['Location']['@attributes']) {
+                                            $location = $array['References']['Reference'][$i]['Locations']['Location'];
+                                            if(!empty($location['@attributes']['ID'])) {
+                                                $locationStr = $this->generatedHash($location);
+                                                $hash = hash('md5', $locationStr);
+                                                $this->insertInHashTable( 'LocationHash', $hash, ($settings['sPid']) ?: '0');
+                                                $columnExists = $this->columnExists('LocationRepository', $location['@attributes']['ID'], 'tx_nwcitavi_domain_model_location');
+                                                $this->setDatabase($location, 'Location', $columnExists, $hash, $key, $uniqueId, $settings);
+                                                // Location verknüpfen
+                                                $this->updateReferenceLocation($ref, $location['@attributes']['ID']);
+                                                //Libraries verknüpfen
+                                                if(!empty($iValue['Locations']['Location']['LibraryID'])) {
+                                                    $this->updateLocationLibrary($location['@attributes']['ID'], $iValue['Locations']['Location']['LibraryID']);
+                                                }
+                                            }
+                                            unset($location, $locationAttributes, $db_location, $locationUid);
+                                        } else {
+                                            if ( is_array( $iValue['Locations']['Location'] ) ) {
+                                                $locationsCount = count($iValue['Locations']['Location']);
+                                                for($j = 0; $j < $locationsCount; $j++) {
+                                                    $location = $array['References']['Reference'][$i]['Locations']['Location'][$j];
+                                                    if(!empty($location['@attributes']['ID'])) {
+                                                        $locationStr = $this->generatedHash($location);
+                                                        $hash = hash('md5', $locationStr);
+                                                        $this->insertInHashTable( 'LocationHash', $hash, ($settings['sPid']) ?: '0');
+                                                        $columnExists = $this->columnExists('LocationRepository', $location['@attributes']['ID'], 'tx_nwcitavi_domain_model_location');
+                                                        $this->setDatabase($location, 'Location', $columnExists, $hash, $key, $uniqueId, $settings);
+                                                        // Location verknüpfen
+                                                        $this->updateReferenceLocation($ref, $location['@attributes']['ID']);
+                                                        //Libraries verknüpfen
+                                                        if(!empty($iValue['Locations']['Location'][$j]['LibraryID'])) {
+                                                            $this->updateLocationLibrary($location['@attributes']['ID'], $iValue['Locations']['Location'][$j]['LibraryID']);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            unset($location, $locationAttributes, $db_location, $locationUid);
+                                        }
+                                    }
+                                    unset($ref, $refAttributes, $db_ref, $refUid);
+                                }
+                                $this->deletedDatabaseColumns('tx_nwcitavi_domain_model_location', 'tx_nwcitavi_domain_model_locationhash', $settings);
+                            	file_put_contents($dir.'/task.txt', 10);
+                            } else {
+                                file_put_contents($dir.'/task.txt', 10);
+                            }
+                        } catch (Exception $e) {
+                            $this->logRepository->addLog(1, 'Locations could not be generated. Fehler: '.$e, 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+                        }
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+        }
+    }
+
+    /**
+     * Parse the files send with the xml data
+     */
+    public function taskParseXMLFiles(): void
+    {
+        $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
+        $uniqueId = null;
+        $key = null;
+        try {
+            $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+            //$this->initTSFE($this->getRootpage($objectManager));
+            //$settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
+            $configurationManager = $objectManager->get(ConfigurationManager::class);
+            $fullTs = $configurationManager->getConfiguration(ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT);
+            $settings = $fullTs['plugin.']['tx_nwcitavi.']['settings.'];
+            $check = file_exists($dir.'/scheduler.txt');
+            if($check) {
+                $taskExists = file_exists($dir.'/task.txt');
+                if($taskExists) {
+                    $taskString = file_get_contents ( $dir.'/task.txt' );
+                    $taskCols = explode('|', $taskString);
+                    if((int)$taskCols[0] === 10) {
+                        $schedulerString = file_get_contents ( $dir.'/scheduler.txt' );
+                        $schedulerCols = explode('|', $schedulerString);
+                        [$fileName, $key, $uniqueId] = $schedulerCols;
+                        unlink($fileName);
+                        if(file_exists($fileName)) {
+                            $this->logRepository->addLog(1, 'File "'.$fileName.'" could not be deleted', 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task still working.', ''.$key.'');
+                        }
+                        // FileReference erstellen
+                        $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/files/');
+                        $fileCheck = file_exists($dir.'/files.txt');
+                        if($fileCheck) {
+                            $file = $dir.'/files.txt';
+                            $file_handle = fopen($file, 'r');
+                            while (!feof($file_handle)) {
+                                $line = fgets($file_handle);
+                                if(!empty($line)) {
+                                    $fileCols = explode('|', $line);
+                                    [$referenceId, $file, $fileType] = $fileCols;
+                                    $this->setFileReferences($referenceId, $file, $fileType);
+                                }
+                            }
+                            fclose($file_handle);
+                            unlink($dir.'/files.txt');
+                            if(file_exists($dir.'/files.txt')) {
+                                $this->logRepository->addLog(1, 'File "'.$dir.'/files.txt" could not be deleted', 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task still working.', ''.$key.'');
+                            }
+                        }
+                        $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
+                        file_put_contents($dir.'/task.txt', 11);
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
+        }
+    }
+
+    /**
+     * Cleans all tables and the exports after a import
+     */
     public function taskParseXMLCleaner(): void
     {
         $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
         $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
         $schedulerCols = explode('|', $dir.'/scheduler.txt');
+        [$fileName, $key, $uniqueId] = $schedulerCols;
         try {
-            $this->initTSFE($this->getRootpage($objectManager));
-            $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
+            //$this->initTSFE($this->getRootpage($objectManager));
+            //$settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
+            $configurationManager = $objectManager->get(ConfigurationManager::class);
+            $fullTs = $configurationManager->getConfiguration(ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT);
+            $settings = $fullTs['plugin.']['tx_nwcitavi.']['settings.'];
             $check = file_exists($dir.'/scheduler.txt');
             if($check) {
             	$taskExists = file_exists($dir.'/task.txt');
@@ -2722,32 +2252,35 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
             	    $taskString = file_get_contents ( $dir.'/task.txt' );
             	    $taskCols = explode('|', $taskString);
             	    if((int)$taskCols[0] === 11) {
-            	        //$this->compareHashData($settings);
+            	        $this->compareHashData($settings);
             	        $this->compareExportFiles($settings);
 
-            	        //file_put_contents($dir.'/task.txt', 12);
+            	        file_put_contents($dir.'/task.txt', 12);
             	    }
             	}
             }
         } catch (Exception $e) {
-            $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$schedulerCols[2].'', '[Citavi Parser]: Task was terminated.', ''.$schedulerCols[1].'');
-            $message = GeneralUtility::makeInstance(FlashMessage::class, $e, 'Error: Task was terminated', FlashMessage::ERROR, TRUE);
-
-            $flashMessageService = $objectManager->get(FlashMessageService::class);
-            $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-            $messageQueue->addMessage($message);
+            $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
         }
     }
 
+    /**
+     * Generates person sorting in the database
+     *
+     * @throws IllegalObjectTypeException
+     * @throws UnknownObjectException
+     */
     public function taskParseXMLSorting(): void
     {
         $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/');
         $schedulerCols = explode('|', $dir.'/scheduler.txt');
-        $objectManager = null;
+        [$fileName, $key, $uniqueId] = $schedulerCols;
+        $objectManager = GeneralUtility::makeInstance(ObjectManager::class);
         try {
-            $objectManager = GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
-            $this->initTSFE($this->getRootpage($objectManager));
-            $settings = $GLOBALS['TSFE']->tmpl->setup['plugin.']['tx_nwcitavi.']['settings.'];
+            //$this->initTSFE($this->getRootpage($objectManager));
+            $configurationManager = $objectManager->get(ConfigurationManager::class);
+            $fullTs = $configurationManager->getConfiguration(ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT);
+            $settings = $fullTs['plugin.']['tx_nwcitavi.']['settings.'];
             $taskExists = file_exists($dir . '/task.txt');
             if ($taskExists) {
                 $taskString = file_get_contents($dir . '/task.txt');
@@ -2786,73 +2319,103 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
                             }
                         }
                         $this->update($reference);
-                        $persistenceManager = $this->objectManager->get("TYPO3\\CMS\\Extbase\\Persistence\\Generic\\PersistenceManager");
+                        $persistenceManager = $this->objectManager->get(PersistenceManager::class);
                         $persistenceManager->persistAll();
                     }
 
                     unlink($dir.'/task.txt');
 
                     if(file_exists($dir.'/task.txt')) {
-                        $this->logRepository->addLog(1, 'File "'.$dir.'/task.txt" could not be deleted', 'Parser', ''.$schedulerCols[2].'', '[Citavi Parser]: Task still working.', ''.$schedulerCols[1].'');
-                        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage',
-                            'File "'.$this->dir.'/task.txt" could not be deleted',
-                            'Warning',
-                            FlashMessage::WARNING,
-                            TRUE
-                        );
-
-                        $flashMessageService = $objectManager->get(FlashMessageService::class);
-                        $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-                        $messageQueue->addMessage($message);
+                        $this->logRepository->addLog(1, 'File "'.$dir.'/task.txt" could not be deleted', 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task still working.', ''.$key.'');
                     }
 
                     unlink($dir.'/scheduler.txt');
 
                     if(file_exists($dir.'/scheduler.txt')) {
-                        $this->logRepository->addLog(1, 'File "'.$dir.'/scheduler.txt" could not be deleted', 'Parser', ''.$schedulerCols[2].'', '[Citavi Parser]: Task still working.', ''.$schedulerCols[1].'');
-                        $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage', 'File "'.$dir.'/scheduler.txt" could not be deleted', 'Warning', FlashMessage::WARNING, TRUE);
-
-                        $flashMessageService = $objectManager->get(FlashMessageService::class);
-                        $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-                        $messageQueue->addMessage($message);
+                        $this->logRepository->addLog(1, 'File "'.$dir.'/scheduler.txt" could not be deleted', 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task still working.', ''.$key.'');
                     }
                 }
             }
         } catch (Exception $e) {
-            $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$schedulerCols[2].'', '[Citavi Parser]: Task was terminated.', ''.$schedulerCols[1].'');
-            $message = GeneralUtility::makeInstance('TYPO3\\CMS\\Core\\Messaging\\FlashMessage', $e, 'Error: Task was terminated', FlashMessage::ERROR, TRUE);
-
-            $flashMessageService = $objectManager->get(FlashMessageService::class);
-            $messageQueue = $flashMessageService->getMessageQueueByIdentifier();
-            $messageQueue->addMessage($message);
+            $this->logRepository->addLog(1, 'Fehler: '.$e.'', 'Parser', ''.$uniqueId.'', '[Citavi Parser]: Task was terminated.', ''.$key.'');
         }
     }
 
-    public function setFileReferences($referenceId, $file, $fileType, $settings) {
-      $reference = $this->getByCitaviId($referenceId);
-      if($reference) {
-        $resourceFactory = ResourceFactory::getInstance();
-        $fileReference = $resourceFactory->getFileObject((int)$file);
-        $newFileReference = $this->objectManager->get('Netzweber\\NwCitavi\\Domain\\Model\\FileReference');
-        $newFileReference->setFile($fileReference);
-        if(trim($fileType) == 'cover') {
-          $reference->setCover($newFileReference);
-          $this->update($reference);
-
-          $persistenceManager = $this->objectManager->get("TYPO3\\CMS\\Extbase\\Persistence\\Generic\\PersistenceManager");
-          $persistenceManager->persistAll();
+    /**
+     * Compare the export files in temp and export dir and unlink if nessesary
+     *
+     * @param $settings
+     */
+    public function compareExportFiles($settings): void
+    {
+        $exportDir = GeneralUtility::getFileAbsFileName($settings['export.']['path']);
+        $tempDir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/temp/');
+        $filesInExportDir = scandir($exportDir);
+        $filesInExportDir = count($filesInExportDir)-2;
+        $filesInTempDir = scandir($tempDir);
+        $filesInTempDir = count($filesInTempDir)-2;
+        if(($filesInExportDir > 0) && is_dir($exportDir)) {
+            array_map(function($value) {
+                $this->delete($value);
+                rmdir($value);
+            },glob($exportDir . '*', GLOB_ONLYDIR));
+            array_map('unlink', glob($exportDir. '*'));
         }
-
-        if(trim($fileType) == 'attachment') {
-          $reference->setAttachment($newFileReference);
-          $this->update($reference);
-
-          $persistenceManager = $this->objectManager->get("TYPO3\\CMS\\Extbase\\Persistence\\Generic\\PersistenceManager");
-          $persistenceManager->persistAll();
+        if(($filesInTempDir > 0) && is_dir($exportDir) && is_dir($tempDir)) {
+            $src = 'temp';
+            $dst = 'export';
+            $files = glob($tempDir . '*');
+            foreach($files as $file){
+                $file_to_go = str_replace($src,$dst,$file);
+                copy($file, $file_to_go);
+            }
+            array_map(function($value) {
+                $this->delete($value);
+                rmdir($value);
+            },glob($tempDir . '*', GLOB_ONLYDIR));
+            array_map('unlink', glob($tempDir. '*'));
         }
-      }
     }
 
+    /**
+     * Set file reference relation between reference and file
+     *
+     * @param $referenceId
+     * @param $file
+     * @param $fileType
+     * @throws IllegalObjectTypeException
+     * @throws UnknownObjectException
+     * @throws FileDoesNotExistException
+     */
+    public function setFileReferences($referenceId, $file, $fileType): void
+    {
+        $reference = $this->getByCitaviId($referenceId);
+        if($reference) {
+            $resourceFactory = ResourceFactory::getInstance();
+            $fileReference = $resourceFactory->getFileObject((int)$file);
+            $newFileReference = $this->objectManager->get(FileReference::class);
+            $newFileReference->setFile($fileReference);
+            if(trim($fileType) === 'cover') {
+                $reference->setCover($newFileReference);
+                $this->update($reference);
+                $persistenceManager = $this->objectManager->get(PersistenceManager::class);
+                $persistenceManager->persistAll();
+            }
+            if(trim($fileType) === 'attachment') {
+            	$reference->setAttachment($newFileReference);
+            	$this->update($reference);
+            	$persistenceManager = $this->objectManager->get(PersistenceManager::class);
+            	$persistenceManager->persistAll();
+            }
+        }
+    }
+
+    /**
+     * Return the reference from passed id
+     *
+     * @param $referenceId
+     * @return mixed|null
+     */
     public function getByCitaviId($referenceId) {
         $reference = null;
   	    $query = $this->createQuery();
@@ -2864,642 +2427,6 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
   	    }
   	    return $reference;
   	}
-
-    public function findAllByFilter($settings, $page) {
-  	    $query = $this->createQuery();
-  	    $query->matching($query->logicalAnd($this->getAndOrConstraints($query, $settings)));
-  	    if($settings['showAllOnOnePage'] === '0') {
-  	        $query->setLimit((int)$settings['pagelimit']);
-  	        $query->setOffset($page);
-  	    }
-  	    if($settings['showyearheadline'] === '1') {
-            $query->setOrderings(
-                [
-                    'sortDate' => QueryInterface::ORDER_DESCENDING,
-                    'sortPerson' => QueryInterface::ORDER_ASCENDING
-                ]
-            );
-        } else if ($settings['showreferencetype'] === '1') {
-            $query->setOrderings(
-                [
-                    'referenceType' => QueryInterface::ORDER_ASCENDING,
-                    'sortDate' => QueryInterface::ORDER_DESCENDING,
-                    'sortPerson' => QueryInterface::ORDER_ASCENDING
-                ]
-            );
-        }
-        return $query->execute();
-    }
-
-    public function numAllByFilter($settings): int
-    {
-        $query = $this->createQuery();
-  		$query->matching($query->logicalAnd($this->getAndOrConstraints($query, $settings)));
-  		return $query->count();
-    }
-
-    /**
-     * @param $query
-     * @param $settings
-     * @return array
-     */
-    public function getAndOrConstraints($query, $settings): array
-    {
-        $selectedAuthor = null;
-  	    $authorConstraints = null;
-        $author = null;
-        $selectedPublisher = null;
-        $publisher = null;
-        $publisherConstraints = null;
-        $selectedReferenceType = null;
-        $referenceType = null;
-        $referenceTypeConstraints = null;
-        $selectedKeyword = null;
-        $keyword = null;
-        $keywordsConstraints = null;
-        $selectedCategory = null;
-        $category = null;
-        $categoryConstraints = null;
-        $categoriesConstraints = null;
-        $selectedPersons = null;
-        $person = null;
-        $personsConstraints = null;
-        $selectedEditors = null;
-        $editor = null;
-        $editorsConstraints = null;
-        $selectedAuthors = null;
-        $authorsConstraints = null;
-        $selectedSpecialCategories = null;
-        $specialCategory = null;
-        $specialCategoriesConstraints = null;
-        $selectedSeriesTitle = null;
-        $seriesTitle = null;
-        $seriesTitlesConstraints = null;
-        $selectedPeriodical = null;
-        $periodical = null;
-        $periodicalsConstraints = null;
-  	    $constraints[] = $query->like('literaturlistId', $settings['import_key']);
-  	    if($settings['searchstr'] !== '') {
-  	        switch($settings['searchOptions']) {
-  	            case 'title':
-  	                $constraints[] = $query->logicalAnd(
-  	                    $query->logicalOr(
-  	                    	$query->like('title', '%'.$settings['searchstr'].'%'),
-                            $query->like('title', ''.$settings['searchstr'].'%'),
-                            $query->like('title', '%'.$settings['searchstr'].'')
-                        )
-                    );
-  	                break;
-  	            case 'abstract':
-  	                $constraints[] = $query->logicalAnd(
-  	                    $query->logicalOr(
-  	                        $query->like('abstract', '%'.$settings['searchstr'].'%'),
-                            $query->like('abstract', ''.$settings['searchstr'].'%'),
-                            $query->like('abstract', '%'.$settings['searchstr'].'')
-                        )
-                    );
-  	                break;
-  	            case 'author':
-  	                $constraints[] = $query->logicalAnd(
-  	                    $query->logicalOr(
-  	                        $query->like('authors.firstName', '%'.$settings['searchstr'].'%'),
-                            $query->like('authors.firstName', ''.$settings['searchstr'].'%'),
-                            $query->like('authors.firstName', '%'.$settings['searchstr'].''),
-                            $query->like('authors.lastName', '%'.$settings['searchstr'].'%'),
-                            $query->like('authors.lastName', ''.$settings['searchstr'].'%'),
-                            $query->like('authors.lastName', '%'.$settings['searchstr'].'')
-                        )
-                    );
-  	                break;
-  	            case 'keyword':
-  	                $constraints[] = $query->logicalAnd(
-  	                    $query->logicalOr(
-  	                        $query->like('keywords.name', '%'.$settings['searchstr'].'%'),
-                            $query->like('keywords.name', ''.$settings['searchstr'].'%'),
-                            $query->like('keywords.name', '%'.$settings['searchstr'].'')
-                        )
-                    );
-  	                break;
-  	            default:
-  	                $constraints[] = $query->logicalAnd(
-  	                    $query->logicalOr(
-  	                        $query->like('authors.firstName', '%'.$settings['searchstr'].'%'),
-                            $query->like('authors.firstName', ''.$settings['searchstr'].'%'),
-                            $query->like('authors.firstName', '%'.$settings['searchstr'].''),
-                            $query->like('authors.lastName', '%'.$settings['searchstr'].'%'),
-                            $query->like('authors.lastName', ''.$settings['searchstr'].'%'),
-                            $query->like('authors.lastName', '%'.$settings['searchstr'].''),
-                            $query->like('editors.firstName', '%'.$settings['searchstr'].'%'),
-                            $query->like('editors.firstName', ''.$settings['searchstr'].'%'),
-                            $query->like('editors.firstName', '%'.$settings['searchstr'].''),
-                            $query->like('editors.lastName', '%'.$settings['searchstr'].'%'),
-                            $query->like('editors.lastName', ''.$settings['searchstr'].'%'),
-                            $query->like('editors.lastName', '%'.$settings['searchstr'].''),
-                            $query->like('othersInvolved.firstName', '%'.$settings['searchstr'].'%'),
-                            $query->like('othersInvolved.firstName', ''.$settings['searchstr'].'%'),
-                            $query->like('othersInvolved.firstName', '%'.$settings['searchstr'].''),
-                            $query->like('othersInvolved.lastName', '%'.$settings['searchstr'].'%'),
-                            $query->like('othersInvolved.lastName', ''.$settings['searchstr'].'%'),
-                            $query->like('othersInvolved.lastName', '%'.$settings['searchstr'].''),
-                            $query->like('collaborators.firstName', '%'.$settings['searchstr'].'%'),
-                            $query->like('collaborators.firstName', ''.$settings['searchstr'].'%'),
-                            $query->like('collaborators.firstName', '%'.$settings['searchstr'].''),
-                            $query->like('collaborators.lastName', '%'.$settings['searchstr'].'%'),
-                            $query->like('collaborators.lastName', ''.$settings['searchstr'].'%'),
-                            $query->like('collaborators.lastName', '%'.$settings['searchstr'].''),
-                            $query->like('organizations.firstName', '%'.$settings['searchstr'].'%'),
-                            $query->like('organizations.firstName', ''.$settings['searchstr'].'%'),
-                            $query->like('organizations.firstName', '%'.$settings['searchstr'].''),
-                            $query->like('organizations.lastName', '%'.$settings['searchstr'].'%'),
-                            $query->like('organizations.lastName', ''.$settings['searchstr'].'%'),
-                            $query->like('organizations.lastName', '%'.$settings['searchstr'].''),
-                            $query->like('title', '%'.$settings['searchstr'].'%'),
-                            $query->like('title', ''.$settings['searchstr'].'%'),
-                            $query->like('title', '%'.$settings['searchstr'].''),
-                            $query->like('abstract', '%'.$settings['searchstr'].'%'),
-                            $query->like('abstract', ''.$settings['searchstr'].'%'),
-                            $query->like('abstract', '%'.$settings['searchstr'].''),
-                            $query->like('customField1', '%'.$settings['searchstr'].'%'),
-                            $query->like('customField1', ''.$settings['searchstr'].'%'),
-                            $query->like('customField1', '%'.$settings['searchstr'].''),
-                            $query->like('customField2', '%'.$settings['searchstr'].'%'),
-                            $query->like('customField2', ''.$settings['searchstr'].'%'),
-                            $query->like('customField2', '%'.$settings['searchstr'].''),
-                            $query->like('customField3', '%'.$settings['searchstr'].'%'),
-                            $query->like('customField3', ''.$settings['searchstr'].'%'),
-                            $query->like('customField3', '%'.$settings['searchstr'].''),
-                            $query->like('customField4', '%'.$settings['searchstr'].'%'),
-                            $query->like('customField4', ''.$settings['searchstr'].'%'),
-                            $query->like('customField4', '%'.$settings['searchstr'].''),
-                            $query->like('customField5', '%'.$settings['searchstr'].'%'),
-                            $query->like('customField5', ''.$settings['searchstr'].'%'),
-                            $query->like('customField5', '%'.$settings['searchstr'].''),
-                            $query->like('customField6', '%'.$settings['searchstr'].'%'),
-                            $query->like('customField6', ''.$settings['searchstr'].'%'),
-                            $query->like('customField6', '%'.$settings['searchstr'].''),
-                            $query->like('customField7', '%'.$settings['searchstr'].'%'),
-                            $query->like('customField7', ''.$settings['searchstr'].'%'),
-                            $query->like('customField7', '%'.$settings['searchstr'].''),
-                            $query->like('customField8', '%'.$settings['searchstr'].'%'),
-                            $query->like('customField8', ''.$settings['searchstr'].'%'),
-                            $query->like('customField8', '%'.$settings['searchstr'].''),
-                            $query->like('customField9', '%'.$settings['searchstr'].'%'),
-                            $query->like('customField9', ''.$settings['searchstr'].'%'),
-                            $query->like('customField9', '%'.$settings['searchstr'].''),
-                            $query->like('subtitle', '%'.$settings['searchstr'].'%'),
-                            $query->like('subtitle', ''.$settings['searchstr'].'%'),
-                            $query->like('subtitle', '%'.$settings['searchstr'].''),
-                            $query->like('titleSupplement', '%'.$settings['searchstr'].'%'),
-                            $query->like('titleSupplement', ''.$settings['searchstr'].'%'),
-                            $query->like('titleSupplement', '%'.$settings['searchstr'].''),
-                            $query->like('bookYear', '%'.$settings['searchstr'].'%'),
-                            $query->like('bookYear', ''.$settings['searchstr'].'%'),
-                            $query->like('bookYear', '%'.$settings['searchstr'].''),
-                            $query->like('placeOfPublication', '%'.$settings['searchstr'].'%'),
-                            $query->like('placeOfPublication', ''.$settings['searchstr'].'%'),
-                            $query->like('placeOfPublication', '%'.$settings['searchstr'].''),
-                            $query->like('edition', '%'.$settings['searchstr'].'%'),
-                            $query->like('edition', ''.$settings['searchstr'].'%'),
-                            $query->like('edition', '%'.$settings['searchstr'].''),
-                            $query->like('iSBN', '%'.$settings['searchstr'].'%'),
-                            $query->like('iSBN', ''.$settings['searchstr'].'%'),
-                            $query->like('iSBN', '%'.$settings['searchstr'].''),
-                            $query->like('bookNote', '%'.$settings['searchstr'].'%'),
-                            $query->like('bookNote', ''.$settings['searchstr'].'%'),
-                            $query->like('bookNote', '%'.$settings['searchstr'].''),
-                            $query->like('parallelTitle', '%'.$settings['searchstr'].'%'),
-                            $query->like('parallelTitle', ''.$settings['searchstr'].'%'),
-                            $query->like('parallelTitle', '%'.$settings['searchstr'].''),
-                            $query->like('titleInOtherLanguages', '%'.$settings['searchstr'].'%'),
-                            $query->like('titleInOtherLanguages', ''.$settings['searchstr'].'%'),
-                            $query->like('titleInOtherLanguages', '%'.$settings['searchstr'].''),
-                            $query->like('translatedTitle', '%'.$settings['searchstr'].'%'),
-                            $query->like('translatedTitle', ''.$settings['searchstr'].'%'),
-                            $query->like('translatedTitle', '%'.$settings['searchstr'].''),
-                            $query->like('evaluation', '%'.$settings['searchstr'].'%'),
-                            $query->like('evaluation', ''.$settings['searchstr'].'%'),
-                            $query->like('evaluation', '%'.$settings['searchstr'].''),
-                            $query->like('shortTitle', '%'.$settings['searchstr'].'%'),
-                            $query->like('shortTitle', ''.$settings['searchstr'].'%'),
-                            $query->like('shortTitle', '%'.$settings['searchstr'].''),
-                            $query->like('tableOfContents', '%'.$settings['searchstr'].'%'),
-                            $query->like('tableOfContents', ''.$settings['searchstr'].'%'),
-                            $query->like('tableOfContents', '%'.$settings['searchstr'].'')
-                        )
-                    );
-  	        }
-  	    }
-  	    if($settings['searchReferencetype'] > -1 && !empty($settings['searchReferencetype']) && $settings['searchReferencetype'] !== '') {
-  	        if($settings['searchReferencetype'] === 'JournalArticlepeer-reviewed') {
-  	            $constraints[] = $query->like('referenceType', 'JournalArticle');
-  	            $constraints[] = $query->like('customField1', 'peer-reviewed');
-  	        } else if($settings['searchReferencetype'] === 'JournalArticle') {
-  	            $constraints[] = $query->like('referenceType', $settings['searchReferencetype']);
-  	            $constraints[] = $query->logicalNot(
-  	                $query->like('customField1', 'peer-reviewed')
-                );
-  	        } else if($settings['searchReferencetype'] === 'ContributionBookEdited') {
-  	            $constraints[] = $query->like('referenceType', 'Contribution');
-  	            $constraints[] = $query->like('parentReferenceType', 'BookEdited');
-  	        } else if($settings['searchReferencetype'] === 'ContributionConferenceProceedings') {
-  	            $constraints[] = $query->like('referenceType', 'Contribution');
-  	            $constraints[] = $query->like('parentReferenceType', 'ConferenceProceedings');
-  	        } else {
-  	            $constraints[] = $query->like('referenceType', $settings['searchReferencetype']);
-  	        }
-  	    }
-  	    $selectedAuthor = explode(',', $settings['selectedauthor']);
-  	    if($selectedAuthor[0] === '') {
-  	        unset($selectedAuthor);
-  	    }
-  	    if ( is_array( $selectedAuthor ) ) {
-  	        $numberOfSelectedAuthor = count($selectedAuthor);
-  	        if($numberOfSelectedAuthor > 0) {
-  	            foreach($selectedAuthor as $key => $value) {
-  	                $author[$key] = (int)$value;
-  	            }
-  	            for($i = 0; $i < $numberOfSelectedAuthor; $i++) {
-  	                $authorConstraints[] = $query->contains('authors', $author[$i]);
-  	            }
-  	            $constraints[] = $query->logicalOr(
-  	                $authorConstraints
-                );
-  	        }
-  	    }
-  	    $selectedPublisher = explode(',', $settings['selectedpublisher']);
-  	    if($selectedPublisher[0] === '') {
-            unset($selectedPublisher);
-        }
-  	    if ( is_array( $selectedPublisher ) ) {
-  	    	$numberOfSelectedPublisher = count($selectedPublisher);
-  	    	if($numberOfSelectedPublisher > 0) {
-  	    	    foreach($selectedPublisher as $key => $value) {
-  	    	        $publisher[$key] = (int)$value;
-  	    	    }
-  	    	    for($i = 0; $i < $numberOfSelectedPublisher; $i++) {
-  	    	        $publisherConstraints[] = $query->contains('publishers', $publisher[$i]);
-  	    	    }
-  	    	    $constraints[] = $query->logicalOr(
-  	    	        $publisherConstraints
-                );
-  	    	}
-  	    }
-  	    $selectedReferenceType = explode(',', $settings['selectedreferencetype']);
-  	    if($selectedReferenceType[0] === '') {
-            unset($selectedReferenceType);
-        }
-  	    if ( is_array( $selectedReferenceType ) ) {
-  	        $numberOfSelectedReferenceType = count($selectedReferenceType);
-  	        if($numberOfSelectedReferenceType > 0) {
-  	            foreach($selectedReferenceType as $key => $value) {
-  	                $referenceType[$key] = $value;
-  	            }
-  	            for($i = 0; $i < $numberOfSelectedReferenceType; $i++) {
-  	                if($referenceType[$i] !== '') {
-  	                    $referenceTypeConstraints[] = $query->like('referenceType', $referenceType[$i]);
-  	                }
-  	            }
-  	            $constraints[] = $query->logicalOr(
-  	                $referenceTypeConstraints
-                );
-  	        }
-  	    }
-  	    $selectedKeyword = explode(',', $settings['selectedkeyword']);
-  	    if($selectedKeyword[0] === '') {
-            unset($selectedKeyword);
-        }
-  	    if ( is_array( $selectedKeyword ) ) {
-  	        $numberOfSelectedKeyword = count($selectedKeyword);
-  	        if($numberOfSelectedKeyword > 0) {
-  	            foreach($selectedKeyword as $key => $value) {
-  	                $keyword[$key] = (int)$value;
-  	            }
-  	            for($i = 0; $i < $numberOfSelectedKeyword; $i++) {
-  	                $keywordsConstraints[] = $query->contains('keywords', $keyword[$i]);
-  	            }
-  	            $constraints[] = $query->logicalOr(
-  	                $keywordsConstraints
-                );
-  	        }
-  	    }
-        $selectedSeriesTitle = explode(',', $settings['selectedseriestitle']);
-        if($selectedSeriesTitle[0] === '') {
-            unset($selectedSeriesTitle);
-        }
-        if ( is_array( $selectedSeriesTitle ) ) {
-            $numberOfSelectedSeriesTitle = count($selectedSeriesTitle);
-            if($numberOfSelectedSeriesTitle > 0) {
-                foreach($selectedSeriesTitle as $key => $value) {
-                    $seriesTitle[$key] = (int)$value;
-                }
-                for($i = 0; $i < $numberOfSelectedSeriesTitle; $i++) {
-                    $seriesTitlesConstraints[] = $query->contains('seriestitles', $seriesTitle[$i]);
-                }
-                $constraints[] = $query->logicalOr(
-                    $seriesTitlesConstraints
-                );
-            }
-        }
-        $selectedPeriodical = explode(',', $settings['selectedperiodical']);
-        if($selectedPeriodical[0] === '') {
-            unset($selectedPeriodical);
-        }
-        if ( is_array( $selectedPeriodical ) ) {
-            $numberOfSelectedPeriodical = count($selectedPeriodical);
-            if($numberOfSelectedPeriodical > 0) {
-                foreach($selectedPeriodical as $key => $value) {
-                    $periodical[$key] = (int)$value;
-                }
-                for($i = 0; $i < $numberOfSelectedPeriodical; $i++) {
-                    $periodicalsConstraints[] = $query->contains('periodicals', $periodical[$i]);
-                }
-                $constraints[] = $query->logicalOr(
-                    $periodicalsConstraints
-                );
-            }
-        }
-  	    $subcategories = $this->getSubCategories(explode(',', $settings['selectedcategory']), explode(',', $settings['selectedcategory']), count(explode(',', $settings['selectedcategory'])));
-  	    if($subcategories) {
-  	        $selectedCategory = $subcategories;
-  	    } else {
-  	        $selectedCategory = explode(',', $settings['selectedcategory']);
-  	    }
-  	    if($selectedCategory[0] === '') {
-            unset($selectedCategory);
-        }
-  	    if ( is_array( $selectedCategory ) ) {
-  	        $numberOfSelectedCategory = count($selectedCategory);
-  	        if($numberOfSelectedCategory > 0) {
-  	            foreach($selectedCategory as $key => $value) {
-  	                $category[$key] = (int)$value;
-  	            }
-  	            for($i = 0; $i < $numberOfSelectedCategory; $i++) {
-  	                $categoryConstraints[] = $query->contains('categories', $category[$i]);
-  	            }
-  	            if($settings['selectedcategoryoperand'] === '0') {
-                    $constraints[] = $query->logicalOr(
-                        $categoryConstraints
-                    );
-                }
-  	            else {
-                    $constraints[] = $query->logicalAnd(
-                        $categoryConstraints
-                    );
-                }
-  	        }
-  	    }
-  	    $selectedCategories = explode(',', $settings['searchCategories']);
-  	    if($selectedCategories[0] === '' || $selectedCategories[0] === '-1') {
-            unset($selectedCategories);
-        }
-  	    if ( is_array( $selectedCategories ) ) {
-  	        $numberOfSelectedCategories = count($selectedCategories);
-  	        if($numberOfSelectedCategories > 0) {
-  	            foreach($selectedCategories as $key => $value) {
-  	                $category[$key] = (int)$value;
-  	            }
-  	            for($i = 0; $i < $numberOfSelectedCategories; $i++) {
-  	                $categoriesConstraints[] = $query->contains('categories', $category[$i]);
-  	            }
-  	            $constraints[] = $query->logicalOr(
-  	                $categoriesConstraints
-                );
-  	        }
-  	    }
-  	    $selectedPersons = explode(',', $settings['searchPersons']);
-  	    if($selectedPersons[0] === '' || $selectedPersons[0] === '-1') {
-            unset($selectedPersons);
-        }
-  	    if ( is_array( $selectedPersons ) ) {
-  	        $numberOfSelectedPersons = count($selectedPersons);
-  	        if($numberOfSelectedPersons > 0) {
-  	            foreach($selectedPersons as $key => $value) {
-  	                $person[$key] = (int)$value;
-  	            }
-  	            for($i = 0; $i < $numberOfSelectedPersons; $i++) {
-  	                $personsConstraints[] = $query->contains('authors', $person[$i]);
-  	            }
-  	            $constraints[] = $query->logicalOr(
-  	                $personsConstraints
-                );
-  	        }
-  	    }
-  	    $selectedEditors = explode(',', $settings['searchEditors']);
-  	    if($selectedEditors[0] === '' || $selectedEditors[0] === '-1') {
-            unset($selectedEditors);
-        }
-  	    if ( is_array( $selectedEditors ) ) {
-  	        $numberOfSelectedEditors = count($selectedEditors);
-  	        if($numberOfSelectedEditors > 0) {
-  	            foreach($selectedEditors as $key => $value) {
-  	                $editor[$key] = (int)$value;
-  	            }
-  	            for($i = 0; $i < $numberOfSelectedEditors; $i++) {
-  	                $editorsConstraints[] = $query->contains('editors', $editor[$i]);
-  	            }
-  	            $constraints[] = $query->logicalOr(
-  	                $editorsConstraints
-                );
-  	        }
-  	    }
-  	    $selectedAuthors = explode(',', $settings['searchAuthors']);
-  	    if($selectedAuthors[0] === '' || $selectedAuthors[0] === '-1') {
-            unset($selectedAuthors);
-        }
-  	    if ( is_array( $selectedAuthors ) ) {
-  	        $numberOfSelectedAuthors = count($selectedAuthors);
-  	        if($numberOfSelectedAuthors > 0) {
-  	            foreach($selectedAuthors as $key => $value) {
-  	                $author[$key] = (int)$value;
-  	            }
-  	            for($i = 0; $i < $numberOfSelectedAuthors; $i++) {
-  	                $authorsConstraints[] = $query->contains('authors', $author[$i]);
-  	            }
-  	            $constraints[] = $query->logicalOr(
-  	                $authorsConstraints
-                );
-  	        }
-  	    }
-  	    $selectedSpecialCategories = explode(',', $settings['searchSpecialcategories']);
-  	    if($selectedSpecialCategories[0] === '' || $selectedSpecialCategories[0] === '-1') {
-            unset($selectedSpecialCategories);
-        }
-  	    if ( is_array( $selectedSpecialCategories ) ) {
-  	        $numberOfSpecialCategories = count($selectedSpecialCategories);
-  	        if($numberOfSpecialCategories > 0) {
-  	            foreach($selectedSpecialCategories as $key => $value) {
-  	                $specialCategory[$key] = (int)$value;
-  	            }
-  	            for($i = 0; $i < $numberOfSpecialCategories; $i++) {
-  	                $specialCategoriesConstraints[] = $query->contains('categories', $specialCategory[$i]);
-  	            }
-  	            $constraints[] = $query->logicalOr(
-  	                $specialCategoriesConstraints
-                );
-  	        }
-  	    }
-  	    if((int)$settings['searchYearfrom'] > 0 && (int)$settings['searchYearto'] > 0) {
-  	        $constraints[] = $query->logicalAnd(
-  	            $query->logicalOr(
-  	                $query->logicalAnd(
-  	                    $query->greaterThanOrEqual('bookDate', (int)$settings['searchYearfrom']),
-                        $query->lessThanOrEqual('bookDate', (int)$settings['searchYearto'])
-                    ),
-                    $query->logicalAnd(
-                        $query->greaterThanOrEqual('bookYear', (int)$settings['searchYearfrom']),
-                        $query->lessThanOrEqual('bookYear', (int)$settings['searchYearto'])
-                    )
-                )
-            );
-  	    } else if((int)$settings['searchYearfrom'] > 0 && (int)$settings['searchYearto'] === -1) {
-  	        $constraints[] = $query->logicalAnd(
-  	            $query->logicalOr(
-  	                $query->greaterThanOrEqual('bookDate', (int)$settings['searchYearfrom']),
-                    $query->greaterThanOrEqual('bookYear', (int)$settings['searchYearfrom'])
-                )
-            );
-  	    } else if((int)$settings['searchYearfrom'] === -1 && (int)$settings['searchYearto'] > 0) {
-  	        $constraints[] = $query->logicalAnd(
-  	            $query->logicalOr(
-  	                $query->logicalAnd(
-  	                    $query->lessThanOrEqual('bookDate', (int)$settings['searchYearto']),
-                        $query->greaterThan('bookDate', 0)
-                    ),
-                    $query->logicalAnd(
-                        $query->lessThanOrEqual('bookYear', (int)$settings['searchYearto']),
-                        $query->greaterThan('bookYear', 0)
-                    )
-                )
-            );
-  	    }
-  	    $notConstraints = $this->getNotConstraints($query, $settings);
-  	    if($notConstraints) {
-  	        $constraints[] = $notConstraints;
-  	    }
-  	    return $constraints;
-    }
-
-    public function getNotConstraints($query, $settings) {
-  	    $referenceType = $settings['referencetype']['ignore'];
-        $notConstraints = null;
-        $constraints = null;
-        if ( is_array( $referenceType ) ) {
-            $numberOfIgnoredReferenceType = count($referenceType);
-            if($numberOfIgnoredReferenceType > 0) {
-                foreach ($referenceType as $i => $iValue) {
-                    if($iValue !== '') {
-                        $notConstraints[] = $query->logicalNot($query->like('referenceType', $referenceType[$i]));
-                    }
-                }
-            }
-            if (is_array($notConstraints) && count($notConstraints) > 0) {
-                $constraints = $query->logicalAnd($notConstraints);
-            }
-        }
-
-        return $constraints;
-  	}
-
-    public function getSubCategories($categories, array $subcategories = [], $count = 0) {
-      $count = count($subcategories);
-      if(is_array($categories)) {
-        foreach($categories as $category) {
-          $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('tx_nwcitavi_category_category_mm');
-          $statement = $queryBuilder
-             ->select('uid_local')
-             ->from('tx_nwcitavi_category_category_mm')
-             ->where(
-                $queryBuilder->expr()->eq('uid_foreign', $queryBuilder->createNamedParameter($category))
-             )
-             ->execute();
-          while ($row = $statement->fetch()) {
-             $subcategories[$count] = $row['uid_local'];
-             $uid[0] = $row['uid_local'];
-             $subcategories = $this->getSubCategories($uid, $subcategories, $count);
-             $count = count($subcategories);
-          }
-        }
-      } else {
-        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('tx_nwcitavi_category_category_mm');
-        $statement = $queryBuilder
-           ->select('uid_local')
-           ->from('tx_nwcitavi_category_category_mm')
-           ->where(
-              $queryBuilder->expr()->eq('uid_foreign', $queryBuilder->createNamedParameter($categories))
-           )
-           ->execute();
-        while ($row = $statement->fetch()) {
-           $subcategories[$count] = $row['uid_local'];
-           $uid[0] = $row['uid_local'];
-           $subcategories = $this->getSubCategories($uid, $subcategories, $count);
-           $count = count($subcategories);
-        }
-      }
-
-      return $subcategories;
-    }
-
-    public function getOrderings($settings) {
-      $selectedpublicationsreferences = null;
-      if($settings['selectedpublicationsreferences'] > -1 || $settings['selectedpublicationsreferences'] != '') {
-        $selectedpublicationsreferences = explode(",", $settings['selectedpublicationsreferences']);
-        if($selectedpublicationsreferences[0] == '') {
-          unset($selectedpublicationsreferences);
-        }
-      }
-
-      if((int)$settings['selectedprofessor'] > 0 && (int)$settings['sortbyprofessor'] == 1) {
-        if(!empty($settings['sorting'])) {
-          $ordering = array(
-            'custom_field7, \'10\', \'9\', \'8\', \'7\', \'6\', \'5\', \'4\', \'3\', \'2\', \'1\'' => \Netzweber\NwCitavi\Xclass\Typo3DbQueryParser::ORDER_FIELD_DESCENDING,
-            'reference_type, '.$sort.'' => \Netzweber\NwCitavi\Xclass\Typo3DbQueryParser::ORDER_FIELD_ASCENDING,
-            'parentReferenceType' => QueryInterface::ORDER_DESCENDING,
-            'customField1' => QueryInterface::ORDER_DESCENDING,
-            'sortDate' => QueryInterface::ORDER_DESCENDING
-          );
-        } else {
-          $ordering = array(
-            'custom_field7, \'10\', \'9\', \'8\', \'7\', \'6\', \'5\', \'4\', \'3\', \'2\', \'1\'' => \Netzweber\NwCitavi\Xclass\Typo3DbQueryParser::ORDER_FIELD_DESCENDING,
-            'reference_type, \'JournalArticle\', \'Book\', \'Contribution\', \'Unknown\', \'SpecialIssue\', \'UnpublishedWork\', \'ConferenceProceedings\', \'BookEdited\', \'Lecture\'' => \Netzweber\NwCitavi\Xclass\Typo3DbQueryParser::ORDER_FIELD_ASCENDING,
-            'parentReferenceType' => QueryInterface::ORDER_DESCENDING,
-            'customField1' => QueryInterface::ORDER_DESCENDING,
-            'sortDate' => QueryInterface::ORDER_DESCENDING
-          );
-        }
-      } else if(is_array($selectedpublicationsreferences)) {
-        $sorting = '';
-        $i = 0;
-        foreach($selectedpublicationsreferences as $selectedpublicationsreference) {
-          if($i == 0) {
-            $sorting = $selectedpublicationsreference;
-          } else {
-            $sorting .= ', '.$selectedpublicationsreference;
-          }
-          $i++;
-        }
-        $ordering = array(
-          'uid, '.$sorting =>  \Netzweber\NwCitavi\Xclass\Typo3DbQueryParser::ORDER_FIELD_ASCENDING
-        );
-      } else {
-        if(!empty($settings['sorting'])) {
-          $ordering = array(
-            'reference_type, '.$sort.'' => \Netzweber\NwCitavi\Xclass\Typo3DbQueryParser::ORDER_FIELD_ASCENDING,
-            'parentReferenceType' => QueryInterface::ORDER_DESCENDING,
-            'customField1' => QueryInterface::ORDER_DESCENDING,
-            'sortDate' => QueryInterface::ORDER_DESCENDING
-          );
-        } else {
-          $ordering = array(
-            'reference_type, \'JournalArticle\', \'Book\', \'Contribution\', \'Unknown\', \'SpecialIssue\', \'UnpublishedWork\'' => \Netzweber\NwCitavi\Xclass\Typo3DbQueryParser::ORDER_FIELD_ASCENDING,
-            'parentReferenceType' => QueryInterface::ORDER_DESCENDING,
-            'customField1' => QueryInterface::ORDER_DESCENDING,
-            'sortDate' => QueryInterface::ORDER_DESCENDING
-          );
-        }
-      }
-
-      return $ordering;
-    }
 
     /**
      * action importXML
@@ -3660,213 +2587,893 @@ class ReferenceRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
         return true;
     }
 
+    /**
+     * Check if entry already exists in the passed database table
+     *
+     * @param $table
+     * @param $field
+     * @param $valueObj
+     * @return mixed
+     */
     public function checkIfEntryExists($table, $field, $valueObj) {
   	    $value = (array)$valueObj;
-  	    $res = $GLOBALS['TYPO3_DB']->exec_SELECTquery(
+        $data = array();
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable($table);
+        $statement = $queryBuilder
+            ->select('*')
+            ->from($table)
+            ->where(
+                $queryBuilder->expr()->like($field, $queryBuilder->createNamedParameter($value[0]))
+            )
+            ->execute();
+        $i = 0;
+        while ($row = $statement->fetch()) {
+            if($i === 0) {
+                $data = $row;
+            }
+            $i++;
+        }
+  	    /*$res = $GLOBALS['TYPO3_DB']->exec_SELECTquery(
   	        '*',
             $table,
             $field.' LIKE \''.$value[0].'\'',
             '',
             '',
             '');
-  		$data = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($res);
-
-  		return $data;
+  		$data = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($res);*/
+  	    return $data;
     }
 
     /**
-  	 * action importFile
-  	 * @return string JSON
-  	 */
-  	public function importFile($uniqid, $logRepository, $settings) {
-      $this->dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/files/');
-      if(is_writeable($this->dir)) {
-        if ($_FILES['file'] && $_POST['import_key']) {
-          if ($settings['scheduler'] == 1) {
-            $originalFilePath = $_FILES['file']['tmp_name'];
-            $newFileName = $_FILES['file']['name'];
-            $localDriver = $this->objectManager->get('TYPO3\\CMS\\Core\\Resource\\Driver\\LocalDriver');
-            if (!file_exists($this->dir.$localDriver->sanitizeFileName($newFileName))) {
-              $storageRepository = $this->objectManager->get('TYPO3\\CMS\\Core\\Resource\\StorageRepository');
-              $storage = $storageRepository->findByUid((int)$settings['fileStoragePid']);
-              $targetFolder = $storage->getFolder('files');
+     * action importFile
+     *
+     * @param $uniqueId
+     * @param $logRepository
+     * @param $settings
+     * @return string JSON
+     * @throws IllegalObjectTypeException
+     * @throws UnknownObjectException
+     */
+  	public function importFile($uniqueId, $logRepository, $settings): ?string
+    {
+        $movedNewFile = null;
+  	    $dir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/files/');
+  	    if(is_writable($dir)) {
+  	        if ($_FILES['file'] && $_POST['import_key']) {
+  	            if ($settings['scheduler'] === 1) {
+  	                $originalFilePath = $_FILES['file']['tmp_name'];
+  	                $newFileName = $_FILES['file']['name'];
+  	                $localDriver = $this->objectManager->get(LocalDriver::class);
+  	                if (!file_exists($dir.$localDriver->sanitizeFileName($newFileName))) {
+  	                    $storageRepository = $this->objectManager->get(StorageRepository::class);
+  	                    $storage = $storageRepository->findByUid((int)$settings['fileStoragePid']);
+  	                    $targetFolder = $storage->getFolder('files');
+  	                    if (file_exists($originalFilePath)) {
+  	                        $movedNewFile = $storage->addFile($originalFilePath, $targetFolder, $newFileName);
+  	                        $newFileReference = $this->objectManager->get(FileReference::class);
+  	                        $newFileReference->setFile($movedNewFile);
+  	                    }
+  	                    $persistenceManager = $this->objectManager->get(PersistenceManager::class);
+  	                    $persistenceManager->persistAll();
+  	                    file_put_contents($dir.'/files.txt', $_POST['referenceId'].'|'.$movedNewFile->getUid().'|'.$_POST['fileType'].chr(13).chr(10), FILE_APPEND);
+  	                }
+  	                return true;
+  	            } else {
+  	                $referenceQueryResult = $this->findByCitaviId($_POST['referenceId']);
+  	                $reference = $referenceQueryResult[0];
+  	                if($reference) {
+  	                    if($_POST['fileType'] === 'cover') {
+  	                        $originalFilePath = $_FILES['file']['tmp_name'];
+  	                        $newFileName = $_FILES['file']['name'];
+  	                        $localDriver = $this->objectManager->get(LocalDriver::class);
+  	                        if (!file_exists($dir.$localDriver->sanitizeFileName($newFileName))) {
+  	                            $storageRepository = $this->objectManager->get(StorageRepository::class);
+  	                            $storage = $storageRepository->findByUid((int)$settings['fileStoragePid']);
+  	                            $targetFolder = $storage->getFolder('files');
+  	                            if (file_exists($originalFilePath)) {
+  	                                $movedNewFile = $storage->addFile($originalFilePath, $targetFolder, $newFileName);
+  	                                $newFileReference = $this->objectManager->get(FileReference::class);
+  	                                $newFileReference->setFile($movedNewFile);
+  	                                $reference->setCover($newFileReference);
+  	                            }
+  	                            $this->update($reference);
+  	                            $persistenceManager = $this->objectManager->get(PersistenceManager::class);
+  	                            $persistenceManager->persistAll();
+  	                        }
+  	                    }
+  	                    if($_POST['fileType'] === 'attachment') {
+  	                        $originalFilePath = $_FILES['file']['tmp_name'];
+  	                        $newFileName = $_FILES['file']['name'];
+  	                        $localDriver = $this->objectManager->get(LocalDriver::class);
+  	                        if (!file_exists($dir.$localDriver->sanitizeFileName($newFileName))) {
+  	                            $storageRepository = $this->objectManager->get(StorageRepository::class);
+  	                            $storage = $storageRepository->findByUid((int)$settings['fileStoragePid']);
+  	                            $targetFolder = $storage->getFolder('files');
+  	                            if (file_exists($originalFilePath)) {
+  	                                $movedNewFile = $storage->addFile($originalFilePath, $targetFolder, $newFileName);
+  	                                $newFileReference = $this->objectManager->get(FileReference::class);
+  	                                $newFileReference->setFile($movedNewFile);
+  	                                if($newFileReference !== null) {
+  	                                    $reference->setAttachment($newFileReference);
+  	                                }
+  	                            }
+  	                            $this->update($reference);
+  	                            $persistenceManager = $this->objectManager->get(PersistenceManager::class);
+  	                            $persistenceManager->persistAll();
+  	                        }
+  	                    }
+  	                }
+  	                return true;
+  	            }
+  	        } else {
+  	            $statusCodeText = $this->getStatusCodeText(417);
+  	            $logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqueId.'', '[Citavi Upload]: Upload was terminated.', ''.$_POST['import_key'].'', $settings['sPid']);
+  	            $this->getStatusCode(417);
+  	            exit;
+  	        }
+  	    } else {
+  	        $statusCodeText = $this->getStatusCodeText(432);
+  	        $logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqueId.'', '[Citavi Upload]: Upload was terminated.', ''.$_POST['import_key'].'', $settings['sPid']);
+  	        $this->getStatusCode(432);
+  	        exit;
+  	    }
+  	}
 
-
-              if (file_exists($originalFilePath)) {
-                  $movedNewFile = $storage->addFile($originalFilePath, $targetFolder, $newFileName);
-                  $newFileReference = $this->objectManager->get('Netzweber\\NwCitavi\\Domain\\Model\\FileReference');
-                  $newFileReference->setFile($movedNewFile);
-              }
-
-              $persistenceManager = $this->objectManager->get("TYPO3\\CMS\\Extbase\\Persistence\\Generic\\PersistenceManager");
-              $persistenceManager->persistAll();
-
-              file_put_contents($this->dir.'/files.txt', $_POST['referenceId'].'|'.$movedNewFile->getUid().'|'.$_POST['fileType'].chr(13).chr(10), FILE_APPEND);
-            }
-
-            return true;
-          } else {
-            $referenceQueryResult = $this->findByCitaviId($_POST['referenceId']);
-            $reference = $referenceQueryResult[0];
-            if($reference) {
-              if($_POST['fileType'] == 'cover') {
-                $originalFilePath = $_FILES['file']['tmp_name'];
-                $newFileName = $_FILES['file']['name'];
-                $localDriver = $this->objectManager->get('TYPO3\\CMS\\Core\\Resource\\Driver\\LocalDriver');
-                if (!file_exists($this->dir.$localDriver->sanitizeFileName($newFileName))) {
-                  $storageRepository = $this->objectManager->get('TYPO3\\CMS\\Core\\Resource\\StorageRepository');
-                  $storage = $storageRepository->findByUid('3');
-                  $targetFolder = $storage->getFolder('files');
-
-                  if (file_exists($originalFilePath)) {
-                      $movedNewFile = $storage->addFile($originalFilePath, $targetFolder, $newFileName);
-                      $newFileReference = $this->objectManager->get('Netzweber\\NwCitavi\\Domain\\Model\\FileReference');
-                      $newFileReference->setFile($movedNewFile);
-                      $reference->setCover($newFileReference);
-                  }
-                  $this->update($reference);
-
-                  $persistenceManager = $this->objectManager->get("TYPO3\\CMS\\Extbase\\Persistence\\Generic\\PersistenceManager");
-                  $persistenceManager->persistAll();
-                }
-              }
-
-              if($_POST['fileType'] == 'attachment') {
-                $originalFilePath = $_FILES['file']['tmp_name'];
-                $newFileName = $_FILES['file']['name'];
-                $localDriver = $this->objectManager->get('TYPO3\\CMS\\Core\\Resource\\Driver\\LocalDriver');
-                if (!file_exists($this->dir.$localDriver->sanitizeFileName($newFileName))) {
-                  $storageRepository = $this->objectManager->get('TYPO3\\CMS\\Core\\Resource\\StorageRepository');
-                  $storage = $storageRepository->findByUid('3');
-                  $targetFolder = $storage->getFolder('files');
-
-                  if (file_exists($originalFilePath)) {
-                      $movedNewFile = $storage->addFile($originalFilePath, $targetFolder, $newFileName);
-                      $newFileReference = $this->objectManager->get('Netzweber\\NwCitavi\\Domain\\Model\\FileReference');
-                      $newFileReference->setFile($movedNewFile);
-                      if($newFileReference != null) {
-                        $reference->setAttachment($newFileReference);
-                      }
-                  }
-                  $this->update($reference);
-
-                  $persistenceManager = $this->objectManager->get("TYPO3\\CMS\\Extbase\\Persistence\\Generic\\PersistenceManager");
-                  $persistenceManager->persistAll();
-                }
-              }
-            }
-            return true;
-          }
-        } else {
-          $statusCodeText = $this->getStatusCodeText(417);
-          $logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqid.'', '[Citavi Upload]: Upload was terminated.', ''.$_POST['import_key'].'', $settings['sPid']);
-          $this->getStatusCode(417);
-          exit;
-        }
-      } else {
-        $statusCodeText = $this->getStatusCodeText(432);
-        $logRepository->addLog(1, ''.$statusCodeText['text'].': '.$statusCodeText['msg'].'', 'Upload', ''.$uniqid.'', '[Citavi Upload]: Upload was terminated.', ''.$_POST['import_key'].'', $settings['sPid']);
-        $this->getStatusCode(432);
-        exit;
-      }
-    }
-
-    public function findAllReferenceTypOptions() {
+    /**
+     * Get all available reference types
+     *
+     * @return null |null
+     */
+  	public function findAllReferenceTypOptions() {
   	    $option = null;
         $options = null;
-  	    $res = $GLOBALS['TYPO3_DB']->exec_SELECTquery(
-  	        'reference_type',
-            'tx_nwcitavi_domain_model_reference',
-            'deleted = 0 AND hidden = 0',
-            'reference_type',
-            'reference_type',
-            ''
-        );
-  	    if ($GLOBALS['TYPO3_DB']->sql_num_rows($res)) {
-  	        $i = 0;
-  	        while($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($res)){
-  	            $options[$i]['id'] = $row['reference_type'];
-  	            $options[$i]['title'] = LocalizationUtility::translate('tx_nwcitavi_domain_model_reference.'.$row['reference_type'], 'nw_citavi_fe');
-  	            $i++;
-  	        }
-  	    }
-  	    foreach ($options as $key => $row) {
-  	        $option[$key] = $row['title'];
-  	    }
-  	    array_multisort($option, SORT_ASC, $options);
-
-  	    return $options;
-    }
-
-    public function displayAdvancedSearch($settings) {
-      $res = false;
-      if($settings['searchYearfrom'] && $settings['searchYearfrom'] != '-1') $res = true;
-      if($settings['searchYearto'] && $settings['searchYearto'] != '-1') $res = true;
-      if($settings['searchReferencetype'] && $settings['searchReferencetype'] != '-1') $res = true;
-      if($settings['searchCategories'] && $settings['searchCategories'] != '-1') $res = true;
-      if($settings['searchKeywords'] && $settings['searchKeywords'] != '-1') $res = true;
-      if($settings['searchKnowledgeitems'] && $settings['searchKnowledgeitems'] != '-1') $res = true;
-      if($settings['searchLibraries'] && $settings['searchLibraries'] != '-1') $res = true;
-      if($settings['searchLocations'] && $settings['searchLocations'] != '-1') $res = true;
-      if($settings['searchPeriodicals'] && $settings['searchPeriodicals'] != '-1') $res = true;
-      if($settings['searchPersons'] && $settings['searchPersons'] != '-1') $res = true;
-      if($settings['searchEditors'] && $settings['searchEditors'] != '-1') $res = true;
-      if($settings['searchAuthors'] && $settings['searchAuthors'] != '-1') $res = true;
-      if($settings['searchPublishers'] && $settings['searchPublishers'] != '-1') $res = true;
-      if($settings['searchSeriestitles'] && $settings['searchSeriestitles'] != '-1') $res = true;
-      if($settings['searchSpecialcategories'] && $settings['searchSpecialcategories'] != '-1') $res = true;
-
-      return $res;
-    }
-
-    public function getRootpage($objectManager) {
-      $pageRepository = $objectManager->get('TYPO3\CMS\Frontend\Page\PageRepository');
-      $pageRepository->init(FALSE);
-      $defaultPageIds = \array_keys($pageRepository->getMenu(0, 'uid'));
-      return $defaultPageIds[0];
-    }
-
-    public function compareExportFiles($settings): void
-    {
-        $exportDir = GeneralUtility::getFileAbsFileName($settings['export.']['path']);
-        $tempDir = GeneralUtility::getFileAbsFileName('fileadmin/user_upload/citavi_upload/temp/');
-        $filesInExportDir = scandir($exportDir);
-        $filesInExportDir = count($filesInExportDir)-2;
-        $filesInTempDir = scandir($tempDir);
-        $filesInTempDir = count($filesInTempDir)-2;
-        if(($filesInExportDir > 0) && is_dir($exportDir)) {
-            array_map(function($value) {
-                $this->delete($value);
-                rmdir($value);
-            },glob($exportDir . '*', GLOB_ONLYDIR));
-            array_map('unlink', glob($exportDir. '*'));
+        $reference = null;
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('tt_content');
+        $statement = $queryBuilder
+            ->select('reference_type')
+            ->from('tx_nwcitavi_domain_model_reference')
+            ->where(
+                $queryBuilder->expr()->eq('deleted', $queryBuilder->createNamedParameter(0, \PDO::PARAM_INT)),
+                $queryBuilder->expr()->eq('hidden', $queryBuilder->createNamedParameter(0, \PDO::PARAM_INT))
+            )
+            ->groupBy('tx_nwcitavi_domain_model_reference.reference_type')
+            ->orderBy('tx_nwcitavi_domain_model_reference.reference_type')
+            ->execute();
+        $i = 0;
+        while ($row = $statement->fetch()) {
+            $options[$i]['id'] = $row['reference_type'];
+            $options[$i]['title'] = LocalizationUtility::translate('tx_nwcitavi_domain_model_reference.'.$row['reference_type'], 'nw_citavi_fe');
+            $i++;
         }
-        if(($filesInTempDir > 0) && is_dir($exportDir) && is_dir($tempDir)) {
-            $src = 'temp';
-            $dst = 'export';
-            $files = glob($tempDir . '*');
-            foreach($files as $file){
-                $file_to_go = str_replace($src,$dst,$file);
-                copy($file, $file_to_go);
+        if (is_array($options) || is_object($options)) {
+            foreach ($options as $key => $row) {
+                $option[$key] = $row['title'];
             }
-            array_map(function($value) {
-                $this->delete($value);
-                rmdir($value);
-            },glob($tempDir . '*', GLOB_ONLYDIR));
-            array_map('unlink', glob($tempDir. '*'));
-            //\TYPO3\CMS\Extbase\Utility\DebuggerUtility::var_dump($tempFiles);
+            if (is_array($option) || is_object($option)) {
+                array_multisort($option, SORT_ASC, $options);
+            }
         }
+        return $options;
     }
 
     /**
-    * Render the generated SQL of a query in TYPO3 8
-    *
-    * @param QueryInterface $query
-    * @param bool $format
-    * @param bool $exit
-    */
-    /*private function debugQuery($query, $format = true, $exit = true)
+     * Check if the advenced search should be displayed
+     *
+     * @param $settings
+     * @return bool
+     */
+    public function displayAdvancedSearch($settings): bool
     {
-      function getFormattedSQL($sql_raw) { if (empty($sql_raw) || !is_string($sql_raw)) { return false; } $sql_reserved_all = array( 'ACCESSIBLE', 'ACTION', 'ADD', 'AFTER', 'AGAINST', 'AGGREGATE', 'ALGORITHM', 'ALL', 'ALTER', 'ANALYSE', 'ANALYZE', 'AND', 'AS', 'ASC', 'AUTOCOMMIT', 'AUTO_INCREMENT', 'AVG_ROW_LENGTH', 'BACKUP', 'BEGIN', 'BETWEEN', 'BINLOG', 'BOTH', 'BY', 'CASCADE', 'CASE', 'CHANGE', 'CHANGED', 'CHARSET', 'CHECK', 'CHECKSUM', 'COLLATE', 'COLLATION', 'COLUMN', 'COLUMNS', 'COMMENT', 'COMMIT', 'COMMITTED', 'COMPRESSED', 'CONCURRENT', 'CONSTRAINT', 'CONTAINS', 'CONVERT', 'CREATE', 'CROSS', 'CURRENT_TIMESTAMP', 'DATABASE', 'DATABASES', 'DAY', 'DAY_HOUR', 'DAY_MINUTE', 'DAY_SECOND', 'DEFINER', 'DELAYED', 'DELAY_KEY_WRITE', 'DELETE', 'DESC', 'DESCRIBE', 'DETERMINISTIC', 'DISTINCT', 'DISTINCTROW', 'DIV', 'DO', 'DROP', 'DUMPFILE', 'DUPLICATE', 'DYNAMIC', 'ELSE', 'ENCLOSED', 'END', 'ENGINE', 'ENGINES', 'ESCAPE', 'ESCAPED', 'EVENTS', 'EXECUTE', 'EXISTS', 'EXPLAIN', 'EXTENDED', 'FAST', 'FIELDS', 'FILE', 'FIRST', 'FIXED', 'FLUSH', 'FOR', 'FORCE', 'FOREIGN', 'FROM', 'FULL', 'FULLTEXT', 'FUNCTION', 'GEMINI', 'GEMINI_SPIN_RETRIES', 'GLOBAL', 'GRANT', 'GRANTS', 'GROUP', 'HAVING', 'HEAP', 'HIGH_PRIORITY', 'HOSTS', 'HOUR', 'HOUR_MINUTE', 'HOUR_SECOND', 'IDENTIFIED', 'IF', 'IGNORE', 'IN', 'INDEX', 'INDEXES', 'INFILE', 'INNER', 'INSERT', 'INSERT_ID', 'INSERT_METHOD', 'INTERVAL', 'INTO', 'INVOKER', 'IS', 'ISOLATION', 'JOIN', 'KEY', 'KEYS', 'KILL', 'LAST_INSERT_ID', 'LEADING', 'LEFT', 'LEVEL', 'LIKE', 'LIMIT', 'LINEAR', 'LINES', 'LOAD', 'LOCAL', 'LOCK', 'LOCKS', 'LOGS', 'LOW_PRIORITY', 'MARIA', 'MASTER', 'MASTER_CONNECT_RETRY', 'MASTER_HOST', 'MASTER_LOG_FILE', 'MASTER_LOG_POS', 'MASTER_PASSWORD', 'MASTER_PORT', 'MASTER_USER', 'MATCH', 'MAX_CONNECTIONS_PER_HOUR', 'MAX_QUERIES_PER_HOUR', 'MAX_ROWS', 'MAX_UPDATES_PER_HOUR', 'MAX_USER_CONNECTIONS', 'MEDIUM', 'MERGE', 'MINUTE', 'MINUTE_SECOND', 'MIN_ROWS', 'MODE', 'MODIFY', 'MONTH', 'MRG_MYISAM', 'MYISAM', 'NAMES', 'NATURAL', 'NOT', 'NULL', 'OFFSET', 'ON', 'OPEN', 'OPTIMIZE', 'OPTION', 'OPTIONALLY', 'OR', 'ORDER', 'OUTER', 'OUTFILE', 'PACK_KEYS', 'PAGE', 'PARTIAL', 'PARTITION', 'PARTITIONS', 'PASSWORD', 'PRIMARY', 'PRIVILEGES', 'PROCEDURE', 'PROCESS', 'PROCESSLIST', 'PURGE', 'QUICK', 'RAID0', 'RAID_CHUNKS', 'RAID_CHUNKSIZE', 'RAID_TYPE', 'RANGE', 'READ', 'READ_ONLY', 'READ_WRITE', 'REFERENCES', 'REGEXP', 'RELOAD', 'RENAME', 'REPAIR', 'REPEATABLE', 'REPLACE', 'REPLICATION', 'RESET', 'RESTORE', 'RESTRICT', 'RETURN', 'RETURNS', 'REVOKE', 'RIGHT', 'RLIKE', 'ROLLBACK', 'ROW', 'ROWS', 'ROW_FORMAT', 'SECOND', 'SECURITY', 'SELECT', 'SEPARATOR', 'SERIALIZABLE', 'SESSION', 'SET', 'SHARE', 'SHOW', 'SHUTDOWN', 'SLAVE', 'SONAME', 'SOUNDS', 'SQL', 'SQL_AUTO_IS_NULL', 'SQL_BIG_RESULT', 'SQL_BIG_SELECTS', 'SQL_BIG_TABLES', 'SQL_BUFFER_RESULT', 'SQL_CACHE', 'SQL_CALC_FOUND_ROWS', 'SQL_LOG_BIN', 'SQL_LOG_OFF', 'SQL_LOG_UPDATE', 'SQL_LOW_PRIORITY_UPDATES', 'SQL_MAX_JOIN_SIZE', 'SQL_NO_CACHE', 'SQL_QUOTE_SHOW_CREATE', 'SQL_SAFE_UPDATES', 'SQL_SELECT_LIMIT', 'SQL_SLAVE_SKIP_COUNTER', 'SQL_SMALL_RESULT', 'SQL_WARNINGS', 'START', 'STARTING', 'STATUS', 'STOP', 'STORAGE', 'STRAIGHT_JOIN', 'STRING', 'STRIPED', 'SUPER', 'TABLE', 'TABLES', 'TEMPORARY', 'TERMINATED', 'THEN', 'TO', 'TRAILING', 'TRANSACTIONAL', 'TRUNCATE', 'TYPE', 'TYPES', 'UNCOMMITTED', 'UNION', 'UNIQUE', 'UNLOCK', 'UPDATE', 'USAGE', 'USE', 'USING', 'VALUES', 'VARIABLES', 'VIEW', 'WHEN', 'WHERE', 'WITH', 'WORK', 'WRITE', 'XOR', 'YEAR_MONTH' ); $sql_skip_reserved_words = array('AS', 'ON', 'USING'); $sql_special_reserved_words = array('(', ')'); $sql_raw = str_replace("\n", " ", $sql_raw); $sql_formatted = ""; $prev_word = ""; $word = ""; for ($i = 0, $j = strlen($sql_raw); $i < $j; $i++) { $word .= $sql_raw[$i]; $word_trimmed = trim($word); if ($sql_raw[$i] == " " || in_array($sql_raw[$i], $sql_special_reserved_words)) { $word_trimmed = trim($word); $trimmed_special = false; if (in_array($sql_raw[$i], $sql_special_reserved_words)) { $word_trimmed = substr($word_trimmed, 0, -1); $trimmed_special = true; } $word_trimmed = strtoupper($word_trimmed); if (in_array($word_trimmed, $sql_reserved_all) && !in_array($word_trimmed, $sql_skip_reserved_words)) { if (in_array($prev_word, $sql_reserved_all)) { $sql_formatted .= '<b>' . strtoupper(trim($word)) . '</b>' . '&nbsp;'; } else { $sql_formatted .= '<br/>&nbsp;'; $sql_formatted .= '<b>' . strtoupper(trim($word)) . '</b>' . '&nbsp;'; } $prev_word = $word_trimmed; $word = ""; } else { $sql_formatted .= trim($word) . '&nbsp;'; $prev_word = $word_trimmed; $word = ""; } } } $sql_formatted .= trim($word); return $sql_formatted; } $queryParser = $this->objectManager->get(\TYPO3\CMS\Extbase\Persistence\Generic\Storage\Typo3DbQueryParser::class); $preparedStatement = $queryParser->convertQueryToDoctrineQueryBuilder($query)->getSQL(); $parameters = $queryParser->convertQueryToDoctrineQueryBuilder($query)->getParameters(); $stringParams = []; foreach ($parameters as $key => $parameter) { $stringParams[':' . $key] = $parameter; } $statement = strtr($preparedStatement, $stringParams); if ($format) { echo '<code>' . getFormattedSQL($statement) . '</code>'; } else { echo $statement; } if ($exit) { exit; }
-    }*/
+  	    if($settings['searchYearfrom'] && $settings['searchYearfrom'] != '-1') {
+            return true;
+        }
+  	    if($settings['searchYearto'] && $settings['searchYearto'] != '-1') {
+            return true;
+        }
+  	    if($settings['searchReferencetype'] && $settings['searchReferencetype'] != '-1') {
+            return true;
+        }
+  	    if($settings['searchCategories'] && $settings['searchCategories'] != '-1') {
+            return true;
+        }
+  	    if($settings['searchKeywords'] && $settings['searchKeywords'] != '-1') {
+            return true;
+        }
+  	    if($settings['searchKnowledgeitems'] && $settings['searchKnowledgeitems'] != '-1') {
+            return true;
+        }
+  	    if($settings['searchLibraries'] && $settings['searchLibraries'] != '-1') {
+            return true;
+        }
+  	    if($settings['searchLocations'] && $settings['searchLocations'] != '-1') {
+            return true;
+        }
+  	    if($settings['searchPeriodicals'] && $settings['searchPeriodicals'] != '-1') {
+            return true;
+        }
+  	    if($settings['searchPersons'] && $settings['searchPersons'] != '-1') {
+            return true;
+        }
+  	    if($settings['searchEditors'] && $settings['searchEditors'] != '-1') {
+            return true;
+        }
+  	    if($settings['searchAuthors'] && $settings['searchAuthors'] != '-1') {
+            return true;
+        }
+  	    if($settings['searchPublishers'] && $settings['searchPublishers'] != '-1') {
+            return true;
+        }
+  	    if($settings['searchSeriestitles'] && $settings['searchSeriestitles'] != '-1') {
+            return true;
+        }
+  	    if($settings['searchSpecialcategories'] && $settings['searchSpecialcategories'] != '-1') {
+            return true;
+        }
+        return false;
+  	}
+
+    /**
+     * Get the UID of the root page
+     *
+     * @param $objectManager
+     * @return mixed
+     */
+  	public function getRootpage($objectManager) {
+        $pageRepository = $objectManager->get(PageRepository::class);
+        //$pageRepository->init(FALSE);
+        $defaultPageIds = \array_keys($pageRepository->getMenu(0, 'uid'));
+        return $defaultPageIds[0];
+    }
+
+    /**
+     *
+     *
+     * @param $settings
+     * @param $page
+     * @return array|QueryResultInterface
+     */
+    public function findAllByFilter($settings, $page): object {
+        $query = $this->createQuery();
+        $query->matching($query->logicalAnd($this->getAndOrConstraints($query, $settings)));
+        if($settings['showAllOnOnePage'] === '0') {
+            $query->setLimit((int)$settings['pagelimit']);
+            $query->setOffset($page);
+        }
+        if($settings['showreferencetype'] === '1') {
+            $query->setOrderings(
+                [
+                    'referenceType' => QueryInterface::ORDER_ASCENDING,
+                    'sortDate' => QueryInterface::ORDER_DESCENDING,
+                    'sortPerson' => QueryInterface::ORDER_ASCENDING
+                ]
+            );
+        } else if ($settings['showyearheadline'] === '1') {
+            $query->setOrderings(
+                [
+                    'sortDate' => QueryInterface::ORDER_DESCENDING,
+                    'sortPerson' => QueryInterface::ORDER_ASCENDING
+                ]
+            );
+        } else {
+            $query->setOrderings(
+                [
+                    'sortPerson' => QueryInterface::ORDER_ASCENDING
+                ]
+            );
+        }
+        /*$queryParser = $this->objectManager->get(Typo3DbQueryParser::class);
+        DebuggerUtility::var_dump($queryParser->convertQueryToDoctrineQueryBuilder($query)->getSQL());
+        DebuggerUtility::var_dump($queryParser->convertQueryToDoctrineQueryBuilder($query)->getParameters());*/
+        return $query->execute();
+    }
+
+    public function numAllByFilter($settings): int
+    {
+        $query = $this->createQuery();
+        $query->matching($query->logicalAnd($this->getAndOrConstraints($query, $settings)));
+        return $query->count();
+    }
+
+    /**
+     * @param $query
+     * @param $settings
+     * @return array
+     */
+    public function getAndOrConstraints($query, $settings): array
+    {
+        $selectedAuthor = null;
+        $authorConstraints = null;
+        $author = null;
+        $selectedPublisher = null;
+        $publisher = null;
+        $publisherConstraints = null;
+        $selectedReferenceType = null;
+        $referenceType = null;
+        $referenceTypeConstraints = null;
+        $selectedKeyword = null;
+        $keyword = null;
+        $keywordsConstraints = null;
+        $selectedCategory = null;
+        $category = null;
+        $categoryConstraints = null;
+        $categoriesConstraints = null;
+        $selectedPersons = null;
+        $person = null;
+        $personsConstraints = null;
+        $selectedEditors = null;
+        $editor = null;
+        $editorsConstraints = null;
+        $selectedAuthors = null;
+        $authorsConstraints = null;
+        $selectedSpecialCategories = null;
+        $specialCategory = null;
+        $specialCategoriesConstraints = null;
+        $selectedSeriesTitle = null;
+        $seriesTitle = null;
+        $seriesTitlesConstraints = null;
+        $selectedPeriodical = null;
+        $periodical = null;
+        $periodicalsConstraints = null;
+        $constraints[] = $query->like('literaturlistId', $settings['import_key']);
+        if(!empty($settings['searchstr'])) {
+            switch($settings['searchOptions']) {
+                case 'title':
+                    $constraints[] = $query->logicalAnd(
+                        $query->logicalOr(
+                            $query->like('title', '%'.$settings['searchstr'].'%'),
+                            $query->like('title', ''.$settings['searchstr'].'%'),
+                            $query->like('title', '%'.$settings['searchstr'].'')
+                        )
+                    );
+                    break;
+                case 'abstract':
+                    $constraints[] = $query->logicalAnd(
+                        $query->logicalOr(
+                            $query->like('abstract', '%'.$settings['searchstr'].'%'),
+                            $query->like('abstract', ''.$settings['searchstr'].'%'),
+                            $query->like('abstract', '%'.$settings['searchstr'].'')
+                        )
+                    );
+                    break;
+                case 'author':
+                    $constraints[] = $query->logicalAnd(
+                        $query->logicalOr(
+                            $query->like('authors.firstName', '%'.$settings['searchstr'].'%'),
+                            $query->like('authors.firstName', ''.$settings['searchstr'].'%'),
+                            $query->like('authors.firstName', '%'.$settings['searchstr'].''),
+                            $query->like('authors.lastName', '%'.$settings['searchstr'].'%'),
+                            $query->like('authors.lastName', ''.$settings['searchstr'].'%'),
+                            $query->like('authors.lastName', '%'.$settings['searchstr'].'')
+                        )
+                    );
+                    break;
+                case 'keyword':
+                    $constraints[] = $query->logicalAnd(
+                        $query->logicalOr(
+                            $query->like('keywords.name', '%'.$settings['searchstr'].'%'),
+                            $query->like('keywords.name', ''.$settings['searchstr'].'%'),
+                            $query->like('keywords.name', '%'.$settings['searchstr'].'')
+                        )
+                    );
+                    break;
+                default:
+                    $constraints[] = $query->logicalAnd(
+                        $query->logicalOr(
+                            $query->like('authors.firstName', '%'.$settings['searchstr'].'%'),
+                            $query->like('authors.firstName', ''.$settings['searchstr'].'%'),
+                            $query->like('authors.firstName', '%'.$settings['searchstr'].''),
+                            $query->like('authors.lastName', '%'.$settings['searchstr'].'%'),
+                            $query->like('authors.lastName', ''.$settings['searchstr'].'%'),
+                            $query->like('authors.lastName', '%'.$settings['searchstr'].''),
+                            $query->like('editors.firstName', '%'.$settings['searchstr'].'%'),
+                            $query->like('editors.firstName', ''.$settings['searchstr'].'%'),
+                            $query->like('editors.firstName', '%'.$settings['searchstr'].''),
+                            $query->like('editors.lastName', '%'.$settings['searchstr'].'%'),
+                            $query->like('editors.lastName', ''.$settings['searchstr'].'%'),
+                            $query->like('editors.lastName', '%'.$settings['searchstr'].''),
+                            $query->like('othersInvolved.firstName', '%'.$settings['searchstr'].'%'),
+                            $query->like('othersInvolved.firstName', ''.$settings['searchstr'].'%'),
+                            $query->like('othersInvolved.firstName', '%'.$settings['searchstr'].''),
+                            $query->like('othersInvolved.lastName', '%'.$settings['searchstr'].'%'),
+                            $query->like('othersInvolved.lastName', ''.$settings['searchstr'].'%'),
+                            $query->like('othersInvolved.lastName', '%'.$settings['searchstr'].''),
+                            $query->like('collaborators.firstName', '%'.$settings['searchstr'].'%'),
+                            $query->like('collaborators.firstName', ''.$settings['searchstr'].'%'),
+                            $query->like('collaborators.firstName', '%'.$settings['searchstr'].''),
+                            $query->like('collaborators.lastName', '%'.$settings['searchstr'].'%'),
+                            $query->like('collaborators.lastName', ''.$settings['searchstr'].'%'),
+                            $query->like('collaborators.lastName', '%'.$settings['searchstr'].''),
+                            $query->like('organizations.firstName', '%'.$settings['searchstr'].'%'),
+                            $query->like('organizations.firstName', ''.$settings['searchstr'].'%'),
+                            $query->like('organizations.firstName', '%'.$settings['searchstr'].''),
+                            $query->like('organizations.lastName', '%'.$settings['searchstr'].'%'),
+                            $query->like('organizations.lastName', ''.$settings['searchstr'].'%'),
+                            $query->like('organizations.lastName', '%'.$settings['searchstr'].''),
+                            $query->like('title', '%'.$settings['searchstr'].'%'),
+                            $query->like('title', ''.$settings['searchstr'].'%'),
+                            $query->like('title', '%'.$settings['searchstr'].''),
+                            $query->like('abstract', '%'.$settings['searchstr'].'%'),
+                            $query->like('abstract', ''.$settings['searchstr'].'%'),
+                            $query->like('abstract', '%'.$settings['searchstr'].''),
+                            $query->like('customField1', '%'.$settings['searchstr'].'%'),
+                            $query->like('customField1', ''.$settings['searchstr'].'%'),
+                            $query->like('customField1', '%'.$settings['searchstr'].''),
+                            $query->like('customField2', '%'.$settings['searchstr'].'%'),
+                            $query->like('customField2', ''.$settings['searchstr'].'%'),
+                            $query->like('customField2', '%'.$settings['searchstr'].''),
+                            $query->like('customField3', '%'.$settings['searchstr'].'%'),
+                            $query->like('customField3', ''.$settings['searchstr'].'%'),
+                            $query->like('customField3', '%'.$settings['searchstr'].''),
+                            $query->like('customField4', '%'.$settings['searchstr'].'%'),
+                            $query->like('customField4', ''.$settings['searchstr'].'%'),
+                            $query->like('customField4', '%'.$settings['searchstr'].''),
+                            $query->like('customField5', '%'.$settings['searchstr'].'%'),
+                            $query->like('customField5', ''.$settings['searchstr'].'%'),
+                            $query->like('customField5', '%'.$settings['searchstr'].''),
+                            $query->like('customField6', '%'.$settings['searchstr'].'%'),
+                            $query->like('customField6', ''.$settings['searchstr'].'%'),
+                            $query->like('customField6', '%'.$settings['searchstr'].''),
+                            $query->like('customField7', '%'.$settings['searchstr'].'%'),
+                            $query->like('customField7', ''.$settings['searchstr'].'%'),
+                            $query->like('customField7', '%'.$settings['searchstr'].''),
+                            $query->like('customField8', '%'.$settings['searchstr'].'%'),
+                            $query->like('customField8', ''.$settings['searchstr'].'%'),
+                            $query->like('customField8', '%'.$settings['searchstr'].''),
+                            $query->like('customField9', '%'.$settings['searchstr'].'%'),
+                            $query->like('customField9', ''.$settings['searchstr'].'%'),
+                            $query->like('customField9', '%'.$settings['searchstr'].''),
+                            $query->like('subtitle', '%'.$settings['searchstr'].'%'),
+                            $query->like('subtitle', ''.$settings['searchstr'].'%'),
+                            $query->like('subtitle', '%'.$settings['searchstr'].''),
+                            $query->like('titleSupplement', '%'.$settings['searchstr'].'%'),
+                            $query->like('titleSupplement', ''.$settings['searchstr'].'%'),
+                            $query->like('titleSupplement', '%'.$settings['searchstr'].''),
+                            $query->like('bookYear', '%'.$settings['searchstr'].'%'),
+                            $query->like('bookYear', ''.$settings['searchstr'].'%'),
+                            $query->like('bookYear', '%'.$settings['searchstr'].''),
+                            $query->like('placeOfPublication', '%'.$settings['searchstr'].'%'),
+                            $query->like('placeOfPublication', ''.$settings['searchstr'].'%'),
+                            $query->like('placeOfPublication', '%'.$settings['searchstr'].''),
+                            $query->like('edition', '%'.$settings['searchstr'].'%'),
+                            $query->like('edition', ''.$settings['searchstr'].'%'),
+                            $query->like('edition', '%'.$settings['searchstr'].''),
+                            $query->like('iSBN', '%'.$settings['searchstr'].'%'),
+                            $query->like('iSBN', ''.$settings['searchstr'].'%'),
+                            $query->like('iSBN', '%'.$settings['searchstr'].''),
+                            $query->like('bookNote', '%'.$settings['searchstr'].'%'),
+                            $query->like('bookNote', ''.$settings['searchstr'].'%'),
+                            $query->like('bookNote', '%'.$settings['searchstr'].''),
+                            $query->like('parallelTitle', '%'.$settings['searchstr'].'%'),
+                            $query->like('parallelTitle', ''.$settings['searchstr'].'%'),
+                            $query->like('parallelTitle', '%'.$settings['searchstr'].''),
+                            $query->like('titleInOtherLanguages', '%'.$settings['searchstr'].'%'),
+                            $query->like('titleInOtherLanguages', ''.$settings['searchstr'].'%'),
+                            $query->like('titleInOtherLanguages', '%'.$settings['searchstr'].''),
+                            $query->like('translatedTitle', '%'.$settings['searchstr'].'%'),
+                            $query->like('translatedTitle', ''.$settings['searchstr'].'%'),
+                            $query->like('translatedTitle', '%'.$settings['searchstr'].''),
+                            $query->like('evaluation', '%'.$settings['searchstr'].'%'),
+                            $query->like('evaluation', ''.$settings['searchstr'].'%'),
+                            $query->like('evaluation', '%'.$settings['searchstr'].''),
+                            $query->like('shortTitle', '%'.$settings['searchstr'].'%'),
+                            $query->like('shortTitle', ''.$settings['searchstr'].'%'),
+                            $query->like('shortTitle', '%'.$settings['searchstr'].''),
+                            $query->like('tableOfContents', '%'.$settings['searchstr'].'%'),
+                            $query->like('tableOfContents', ''.$settings['searchstr'].'%'),
+                            $query->like('tableOfContents', '%'.$settings['searchstr'].'')
+                        )
+                    );
+            }
+        }
+        if($settings['searchReferencetype'] > -1 && !empty($settings['searchReferencetype']) && !empty($settings['searchReferencetype'])) {
+            if($settings['searchReferencetype'] === 'JournalArticlepeer-reviewed') {
+                $constraints[] = $query->like('referenceType', 'JournalArticle');
+                $constraints[] = $query->like('customField1', 'peer-reviewed');
+            } else if($settings['searchReferencetype'] === 'JournalArticle') {
+                $constraints[] = $query->like('referenceType', $settings['searchReferencetype']);
+                $constraints[] = $query->logicalNot(
+                    $query->like('customField1', 'peer-reviewed')
+                );
+            } else if($settings['searchReferencetype'] === 'ContributionBookEdited') {
+                $constraints[] = $query->like('referenceType', 'Contribution');
+                $constraints[] = $query->like('parentReferenceType', 'BookEdited');
+            } else if($settings['searchReferencetype'] === 'ContributionConferenceProceedings') {
+                $constraints[] = $query->like('referenceType', 'Contribution');
+                $constraints[] = $query->like('parentReferenceType', 'ConferenceProceedings');
+            } else {
+                $constraints[] = $query->like('referenceType', $settings['searchReferencetype']);
+            }
+        }
+        $selectedAuthor = explode(',', $settings['selectedauthor']);
+        if(empty($selectedAuthor[0])) {
+            unset($selectedAuthor);
+        }
+        if ( is_array( $selectedAuthor ) ) {
+            $numberOfSelectedAuthor = count($selectedAuthor);
+            if($numberOfSelectedAuthor > 0) {
+                foreach($selectedAuthor as $key => $value) {
+                    $author[$key] = (int)$value;
+                }
+                for($i = 0; $i < $numberOfSelectedAuthor; $i++) {
+                    $authorConstraints[] = $query->contains('authors', $author[$i]);
+                }
+                $constraints[] = $query->logicalOr(
+                    $authorConstraints
+                );
+            }
+        }
+        $selectedPublisher = explode(',', $settings['selectedpublisher']);
+        if(empty($selectedPublisher[0])) {
+            unset($selectedPublisher);
+        }
+        if ( is_array( $selectedPublisher ) ) {
+            $numberOfSelectedPublisher = count($selectedPublisher);
+            if($numberOfSelectedPublisher > 0) {
+                foreach($selectedPublisher as $key => $value) {
+                    $publisher[$key] = (int)$value;
+                }
+                for($i = 0; $i < $numberOfSelectedPublisher; $i++) {
+                    $publisherConstraints[] = $query->contains('publishers', $publisher[$i]);
+                }
+                $constraints[] = $query->logicalOr(
+                    $publisherConstraints
+                );
+            }
+        }
+        $selectedReferenceType = explode(',', $settings['selectedreferencetype']);
+        if(empty($selectedReferenceType[0])) {
+            unset($selectedReferenceType);
+        }
+        if ( is_array( $selectedReferenceType ) ) {
+            $numberOfSelectedReferenceType = count($selectedReferenceType);
+            if($numberOfSelectedReferenceType > 0) {
+                foreach($selectedReferenceType as $key => $value) {
+                    $referenceType[$key] = $value;
+                }
+                for($i = 0; $i < $numberOfSelectedReferenceType; $i++) {
+                    if(!empty($referenceType[$i])) {
+                        $referenceTypeConstraints[] = $query->like('referenceType', $referenceType[$i]);
+                    }
+                }
+                $constraints[] = $query->logicalOr(
+                    $referenceTypeConstraints
+                );
+            }
+        }
+        $selectedKeyword = explode(',', $settings['selectedkeyword']);
+        if(empty($selectedKeyword[0])) {
+            unset($selectedKeyword);
+        }
+        if ( is_array( $selectedKeyword ) ) {
+            $numberOfSelectedKeyword = count($selectedKeyword);
+            if($numberOfSelectedKeyword > 0) {
+                foreach($selectedKeyword as $key => $value) {
+                    $keyword[$key] = (int)$value;
+                }
+                for($i = 0; $i < $numberOfSelectedKeyword; $i++) {
+                    $keywordsConstraints[] = $query->contains('keywords', $keyword[$i]);
+                }
+                $constraints[] = $query->logicalOr(
+                    $keywordsConstraints
+                );
+            }
+        }
+        $selectedSeriesTitle = explode(',', $settings['selectedseriestitle']);
+        if(empty($selectedSeriesTitle[0])) {
+            unset($selectedSeriesTitle);
+        }
+        if ( is_array( $selectedSeriesTitle ) ) {
+            $numberOfSelectedSeriesTitle = count($selectedSeriesTitle);
+            if($numberOfSelectedSeriesTitle > 0) {
+                foreach($selectedSeriesTitle as $key => $value) {
+                    $seriesTitle[$key] = (int)$value;
+                }
+                for($i = 0; $i < $numberOfSelectedSeriesTitle; $i++) {
+                    $seriesTitlesConstraints[] = $query->contains('seriestitles', $seriesTitle[$i]);
+                }
+                $constraints[] = $query->logicalOr(
+                    $seriesTitlesConstraints
+                );
+            }
+        }
+        $selectedPeriodical = explode(',', $settings['selectedperiodical']);
+        if(empty($selectedPeriodical[0])) {
+            unset($selectedPeriodical);
+        }
+        if ( is_array( $selectedPeriodical ) ) {
+            $numberOfSelectedPeriodical = count($selectedPeriodical);
+            if($numberOfSelectedPeriodical > 0) {
+                foreach($selectedPeriodical as $key => $value) {
+                    $periodical[$key] = (int)$value;
+                }
+                for($i = 0; $i < $numberOfSelectedPeriodical; $i++) {
+                    $periodicalsConstraints[] = $query->contains('periodicals', $periodical[$i]);
+                }
+                $constraints[] = $query->logicalOr(
+                    $periodicalsConstraints
+                );
+            }
+        }
+        $subcategories = $this->getSubCategories(explode(',', $settings['selectedcategory']), explode(',', $settings['selectedcategory']), count(explode(',', $settings['selectedcategory'])));
+        if($subcategories) {
+            $selectedCategory = $subcategories;
+        } else {
+            $selectedCategory = explode(',', $settings['selectedcategory']);
+        }
+        if(empty($selectedCategory[0])) {
+            unset($selectedCategory);
+        }
+        if ( is_array( $selectedCategory ) ) {
+            $numberOfSelectedCategory = count($selectedCategory);
+            if($numberOfSelectedCategory > 0) {
+                foreach($selectedCategory as $key => $value) {
+                    $category[$key] = (int)$value;
+                }
+                for($i = 0; $i < $numberOfSelectedCategory; $i++) {
+                    $categoryConstraints[] = $query->contains('categories', $category[$i]);
+                }
+                if($settings['selectedcategoryoperand'] === '0') {
+                    $constraints[] = $query->logicalOr(
+                        $categoryConstraints
+                    );
+                }
+                else {
+                    $constraints[] = $query->logicalAnd(
+                        $categoryConstraints
+                    );
+                }
+            }
+        }
+        $selectedCategories = explode(',', $settings['searchCategories']);
+        if(empty($selectedCategories[0]) || $selectedCategories[0] === '-1') {
+            unset($selectedCategories);
+        }
+        if ( is_array( $selectedCategories ) ) {
+            $numberOfSelectedCategories = count($selectedCategories);
+            if($numberOfSelectedCategories > 0) {
+                foreach($selectedCategories as $key => $value) {
+                    $category[$key] = (int)$value;
+                }
+                for($i = 0; $i < $numberOfSelectedCategories; $i++) {
+                    $categoriesConstraints[] = $query->contains('categories', $category[$i]);
+                }
+                $constraints[] = $query->logicalOr(
+                    $categoriesConstraints
+                );
+            }
+        }
+        $selectedPersons = explode(',', $settings['searchPersons']);
+        if(empty($selectedPersons[0]) || $selectedPersons[0] === '-1') {
+            unset($selectedPersons);
+        }
+        if ( is_array( $selectedPersons ) ) {
+            $numberOfSelectedPersons = count($selectedPersons);
+            if($numberOfSelectedPersons > 0) {
+                foreach($selectedPersons as $key => $value) {
+                    $person[$key] = (int)$value;
+                }
+                for($i = 0; $i < $numberOfSelectedPersons; $i++) {
+                    $personsConstraints[] = $query->contains('authors', $person[$i]);
+                }
+                $constraints[] = $query->logicalOr(
+                    $personsConstraints
+                );
+            }
+        }
+        $selectedEditors = explode(',', $settings['searchEditors']);
+        if(empty($selectedEditors[0]) || $selectedEditors[0] === '-1') {
+            unset($selectedEditors);
+        }
+        if ( is_array( $selectedEditors ) ) {
+            $numberOfSelectedEditors = count($selectedEditors);
+            if($numberOfSelectedEditors > 0) {
+                foreach($selectedEditors as $key => $value) {
+                    $editor[$key] = (int)$value;
+                }
+                for($i = 0; $i < $numberOfSelectedEditors; $i++) {
+                    $editorsConstraints[] = $query->contains('editors', $editor[$i]);
+                }
+                $constraints[] = $query->logicalOr(
+                    $editorsConstraints
+                );
+            }
+        }
+        $selectedAuthors = explode(',', $settings['searchAuthors']);
+        if(empty($selectedAuthors[0]) || $selectedAuthors[0] === '-1') {
+            unset($selectedAuthors);
+        }
+        if ( is_array( $selectedAuthors ) ) {
+            $numberOfSelectedAuthors = count($selectedAuthors);
+            if($numberOfSelectedAuthors > 0) {
+                foreach($selectedAuthors as $key => $value) {
+                    $author[$key] = (int)$value;
+                }
+                for($i = 0; $i < $numberOfSelectedAuthors; $i++) {
+                    $authorsConstraints[] = $query->contains('authors', $author[$i]);
+                }
+                $constraints[] = $query->logicalOr(
+                    $authorsConstraints
+                );
+            }
+        }
+        $selectedSpecialCategories = explode(',', $settings['searchSpecialcategories']);
+        if(empty($selectedSpecialCategories[0]) || $selectedSpecialCategories[0] === '-1') {
+            unset($selectedSpecialCategories);
+        }
+        if ( is_array( $selectedSpecialCategories ) ) {
+            $numberOfSpecialCategories = count($selectedSpecialCategories);
+            if($numberOfSpecialCategories > 0) {
+                foreach($selectedSpecialCategories as $key => $value) {
+                    $specialCategory[$key] = (int)$value;
+                }
+                for($i = 0; $i < $numberOfSpecialCategories; $i++) {
+                    $specialCategoriesConstraints[] = $query->contains('categories', $specialCategory[$i]);
+                }
+                $constraints[] = $query->logicalOr(
+                    $specialCategoriesConstraints
+                );
+            }
+        }
+        if((int)$settings['searchYearfrom'] > 0 && (int)$settings['searchYearto'] > 0) {
+            $constraints[] = $query->logicalAnd(
+                $query->logicalOr(
+                    $query->logicalAnd(
+                        $query->greaterThanOrEqual('bookDate', (int)$settings['searchYearfrom']),
+                        $query->lessThanOrEqual('bookDate', (int)$settings['searchYearto'])
+                    ),
+                    $query->logicalAnd(
+                        $query->greaterThanOrEqual('bookYear', (int)$settings['searchYearfrom']),
+                        $query->lessThanOrEqual('bookYear', (int)$settings['searchYearto'])
+                    )
+                )
+            );
+        } else if((int)$settings['searchYearfrom'] > 0 && (int)$settings['searchYearto'] === -1) {
+            $constraints[] = $query->logicalAnd(
+                $query->logicalOr(
+                    $query->greaterThanOrEqual('bookDate', (int)$settings['searchYearfrom']),
+                    $query->greaterThanOrEqual('bookYear', (int)$settings['searchYearfrom'])
+                )
+            );
+        } else if((int)$settings['searchYearfrom'] === -1 && (int)$settings['searchYearto'] > 0) {
+            $constraints[] = $query->logicalAnd(
+                $query->logicalOr(
+                    $query->logicalAnd(
+                        $query->lessThanOrEqual('bookDate', (int)$settings['searchYearto']),
+                        $query->greaterThan('bookDate', 0)
+                    ),
+                    $query->logicalAnd(
+                        $query->lessThanOrEqual('bookYear', (int)$settings['searchYearto']),
+                        $query->greaterThan('bookYear', 0)
+                    )
+                )
+            );
+        }
+        $notConstraints = $this->getNotConstraints($query, $settings);
+        if($notConstraints) {
+            $constraints[] = $notConstraints;
+        }
+        return $constraints;
+    }
+
+    public function getNotConstraints($query, $settings) {
+        $referenceType = $settings['referencetype']['ignore'];
+        $notConstraints = null;
+        $constraints = null;
+        if ( is_array( $referenceType ) ) {
+            $numberOfIgnoredReferenceType = count($referenceType);
+            if($numberOfIgnoredReferenceType > 0) {
+                foreach ($referenceType as $i => $iValue) {
+                    if(!empty($iValue)) {
+                        $notConstraints[] = $query->logicalNot($query->like('referenceType', $referenceType[$i]));
+                    }
+                }
+            }
+            if (is_array($notConstraints) && count($notConstraints) > 0) {
+                $constraints = $query->logicalAnd($notConstraints);
+            }
+        }
+
+        return $constraints;
+    }
+
+    public function getSubCategories($categories, array $subcategories = [], $count = 0) {
+        $count = count($subcategories);
+        if(is_array($categories)) {
+            foreach($categories as $category) {
+                $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('tx_nwcitavi_category_category_mm');
+                $statement = $queryBuilder
+                    ->select('uid_local')
+                    ->from('tx_nwcitavi_category_category_mm')
+                    ->where(
+                        $queryBuilder->expr()->eq('uid_foreign', $queryBuilder->createNamedParameter($category))
+                    )
+                    ->execute();
+                while ($row = $statement->fetch()) {
+                    $subcategories[$count] = $row['uid_local'];
+                    $uid[0] = $row['uid_local'];
+                    $subcategories = $this->getSubCategories($uid, $subcategories, $count);
+                    $count = count($subcategories);
+                }
+            }
+        } else {
+            $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('tx_nwcitavi_category_category_mm');
+            $statement = $queryBuilder
+                ->select('uid_local')
+                ->from('tx_nwcitavi_category_category_mm')
+                ->where(
+                    $queryBuilder->expr()->eq('uid_foreign', $queryBuilder->createNamedParameter($categories))
+                )
+                ->execute();
+            while ($row = $statement->fetch()) {
+                $subcategories[$count] = $row['uid_local'];
+                $uid[0] = $row['uid_local'];
+                $subcategories = $this->getSubCategories($uid, $subcategories, $count);
+                $count = count($subcategories);
+            }
+        }
+
+        return $subcategories;
+    }
+
+    public function getOrderings($settings) {
+        $selectedpublicationsreferences = null;
+        if($settings['selectedpublicationsreferences'] > -1 || $settings['selectedpublicationsreferences'] != '') {
+            $selectedpublicationsreferences = explode(",", $settings['selectedpublicationsreferences']);
+            if($selectedpublicationsreferences[0] == '') {
+                unset($selectedpublicationsreferences);
+            }
+        }
+
+        if((int)$settings['selectedprofessor'] > 0 && (int)$settings['sortbyprofessor'] == 1) {
+            if(!empty($settings['sorting'])) {
+                $ordering = array(
+                    'custom_field7, \'10\', \'9\', \'8\', \'7\', \'6\', \'5\', \'4\', \'3\', \'2\', \'1\'' => \Netzweber\NwCitavi\Xclass\Typo3DbQueryParser::ORDER_FIELD_DESCENDING,
+                    'reference_type, '.$sort.'' => \Netzweber\NwCitavi\Xclass\Typo3DbQueryParser::ORDER_FIELD_ASCENDING,
+                    'parentReferenceType' => QueryInterface::ORDER_DESCENDING,
+                    'customField1' => QueryInterface::ORDER_DESCENDING,
+                    'sortDate' => QueryInterface::ORDER_DESCENDING
+                );
+            } else {
+                $ordering = array(
+                    'custom_field7, \'10\', \'9\', \'8\', \'7\', \'6\', \'5\', \'4\', \'3\', \'2\', \'1\'' => \Netzweber\NwCitavi\Xclass\Typo3DbQueryParser::ORDER_FIELD_DESCENDING,
+                    'reference_type, \'JournalArticle\', \'Book\', \'Contribution\', \'Unknown\', \'SpecialIssue\', \'UnpublishedWork\', \'ConferenceProceedings\', \'BookEdited\', \'Lecture\'' => \Netzweber\NwCitavi\Xclass\Typo3DbQueryParser::ORDER_FIELD_ASCENDING,
+                    'parentReferenceType' => QueryInterface::ORDER_DESCENDING,
+                    'customField1' => QueryInterface::ORDER_DESCENDING,
+                    'sortDate' => QueryInterface::ORDER_DESCENDING
+                );
+            }
+        } else if(is_array($selectedpublicationsreferences)) {
+            $sorting = '';
+            $i = 0;
+            foreach($selectedpublicationsreferences as $selectedpublicationsreference) {
+                if($i == 0) {
+                    $sorting = $selectedpublicationsreference;
+                } else {
+                    $sorting .= ', '.$selectedpublicationsreference;
+                }
+                $i++;
+            }
+            $ordering = array(
+                'uid, '.$sorting =>  \Netzweber\NwCitavi\Xclass\Typo3DbQueryParser::ORDER_FIELD_ASCENDING
+            );
+        } else {
+            if(!empty($settings['sorting'])) {
+                $ordering = array(
+                    'reference_type, '.$sort.'' => \Netzweber\NwCitavi\Xclass\Typo3DbQueryParser::ORDER_FIELD_ASCENDING,
+                    'parentReferenceType' => QueryInterface::ORDER_DESCENDING,
+                    'customField1' => QueryInterface::ORDER_DESCENDING,
+                    'sortDate' => QueryInterface::ORDER_DESCENDING
+                );
+            } else {
+                $ordering = array(
+                    'reference_type, \'JournalArticle\', \'Book\', \'Contribution\', \'Unknown\', \'SpecialIssue\', \'UnpublishedWork\'' => \Netzweber\NwCitavi\Xclass\Typo3DbQueryParser::ORDER_FIELD_ASCENDING,
+                    'parentReferenceType' => QueryInterface::ORDER_DESCENDING,
+                    'customField1' => QueryInterface::ORDER_DESCENDING,
+                    'sortDate' => QueryInterface::ORDER_DESCENDING
+                );
+            }
+        }
+
+        return $ordering;
+    }
 }

@@ -1,0 +1,353 @@
+
+<f:layout name="Default" />
+
+This Template is responsible for creating a table of domain objects.
+
+If you modify this template, do not forget to change the overwrite settings
+in /Configuration/ExtensionBuilder/settings.yaml:
+Resources:
+Private:
+Templates:
+List.html: keep
+
+Otherwise your changes will be overwritten the next time you save the extension in the extension builder
+
+<f:section name="content">
+	<h1>Scheduler Status</h1>
+	<f:flashMessages />
+	<f:if condition="{activeScheduler}">
+		<f:then>
+			<f:link.action class="btn btn-primary" action="scheduler">Reload Page</f:link.action>
+			<ul class="list-group list-group-flush">
+				<li class="list-group-item">Starttime: <span class="badge badge-primary badge-pill"><f:format.date format="d.m.Y - H:i:s">{uploadStart}</f:format.date></span></li>
+				<li class="list-group-item">Citavi Version: <span class="badge badge-primary badge-pill">{ciatviVersion}</span></li>
+				<li class="list-group-item">Citavi File path: <span class="badge badge-primary badge-pill">{ciatviFilePath}</span></li>
+				<li class="list-group-item">Citavi Project record version: <span class="badge badge-primary badge-pill">{ciatviProjectRecordVersion}</span></li>
+				<li class="list-group-item">Import key: <span class="badge badge-primary badge-pill">{importKey}</span></li>
+				<li class="list-group-item">Unique ID: <span class="badge badge-primary badge-pill">{uniqueId}</span></li>
+			</ul>
+			<div class="progress">
+				<div class="progress-bar bg-success" role="progressbar" style="width: {taskPercent}%" aria-valuenow="{taskStep}" aria-valuemin="0" aria-valuemax="12"></div>
+			</div>
+			<table class="table">
+				<f:if condition="{taskStep}>0">
+					<f:then>
+						<tr class="table-success">
+							<th>1# Categories</th>
+							<td>Done</td>
+						</tr>
+					</f:then>
+					<f:else>
+						<f:if condition="{taskStep}==0">
+							<f:then>
+								<tr class="table-primary">
+									<th>1# Categories</th>
+									<td>Working</td>
+								</tr>
+							</f:then>
+							<f:else>
+								<tr class="table-light">
+									<th>1# Categories</th>
+									<td>Waiting</td>
+								</tr>
+							</f:else>
+						</f:if>
+					</f:else>
+				</f:if>
+				<f:if condition="{taskStep}>1">
+					<f:then>
+						<tr class="table-success">
+							<th>2# Keywords</th>
+							<td>Done</td>
+						</tr>
+					</f:then>
+					<f:else>
+						<f:if condition="{taskStep}==1">
+							<f:then>
+								<tr class="table-primary">
+									<th>2# Keywords</th>
+									<td>Working</td>
+								</tr>
+							</f:then>
+							<f:else>
+								<tr class="table-light">
+									<th>2# Keywords</th>
+									<td>Waiting</td>
+								</tr>
+							</f:else>
+						</f:if>
+					</f:else>
+				</f:if>
+				<f:if condition="{taskStep}>2">
+					<f:then>
+						<tr class="table-success">
+							<th>3# Libraries</th>
+							<td>Done</td>
+						</tr>
+					</f:then>
+					<f:else>
+						<f:if condition="{taskStep}==2">
+							<f:then>
+								<tr class="table-primary">
+									<th>3# Libraries</th>
+									<td>Working</td>
+								</tr>
+							</f:then>
+							<f:else>
+								<tr class="table-light">
+									<th>3# Libraries</th>
+									<td>Waiting</td>
+								</tr>
+							</f:else>
+						</f:if>
+					</f:else>
+				</f:if>
+				<f:if condition="{taskStep}>3">
+					<f:then>
+						<tr class="table-success">
+							<th>4# Periodicals</th>
+							<td>Done</td>
+						</tr>
+					</f:then>
+					<f:else>
+						<f:if condition="{taskStep}==3">
+							<f:then>
+								<tr class="table-primary">
+									<th>4# Periodicals</th>
+									<td>Working</td>
+								</tr>
+							</f:then>
+							<f:else>
+								<tr class="table-light">
+									<th>4# Periodicals</th>
+									<td>Waiting</td>
+								</tr>
+							</f:else>
+						</f:if>
+					</f:else>
+				</f:if>
+				<f:if condition="{taskStep}>4">
+					<f:then>
+						<tr class="table-success">
+							<th>5# Persons</th>
+							<td>Done</td>
+						</tr>
+					</f:then>
+					<f:else>
+						<f:if condition="{taskStep}==4">
+							<f:then>
+								<tr class="table-primary">
+									<th>5# Persons</th>
+									<td>Working</td>
+								</tr>
+							</f:then>
+							<f:else>
+								<tr class="table-light">
+									<th>5# Persons</th>
+									<td>Waiting</td>
+								</tr>
+							</f:else>
+						</f:if>
+					</f:else>
+				</f:if>
+				<f:if condition="{taskStep}>5">
+					<f:then>
+						<tr class="table-success">
+							<th>6# Publisher</th>
+							<td>Done</td>
+						</tr>
+					</f:then>
+					<f:else>
+						<f:if condition="{taskStep}==5">
+							<f:then>
+								<tr class="table-primary">
+									<th>6# Publisher</th>
+									<td>Working</td>
+								</tr>
+							</f:then>
+							<f:else>
+								<tr class="table-light">
+									<th>6# Publisher</th>
+									<td>Waiting</td>
+								</tr>
+							</f:else>
+						</f:if>
+					</f:else>
+				</f:if>
+				<f:if condition="{taskStep}>6">
+					<f:then>
+						<tr class="table-success">
+							<th>7# Seriestitles</th>
+							<td>Done</td>
+						</tr>
+					</f:then>
+					<f:else>
+						<f:if condition="{taskStep}==6">
+							<f:then>
+								<tr class="table-primary">
+									<th>7# Seriestitles</th>
+									<td>Working</td>
+								</tr>
+							</f:then>
+							<f:else>
+								<tr class="table-light">
+									<th>7# Seriestitles</th>
+									<td>Waiting</td>
+								</tr>
+							</f:else>
+						</f:if>
+					</f:else>
+				</f:if>
+				<f:if condition="{taskStep}>7">
+					<f:then>
+						<tr class="table-success">
+							<th>8# Knowledgeitems</th>
+							<td>Done</td>
+						</tr>
+					</f:then>
+					<f:else>
+						<f:if condition="{taskStep}==7">
+							<f:then>
+								<tr class="table-primary">
+									<th>8# Knowledgeitems</th>
+									<td>Working</td>
+								</tr>
+							</f:then>
+							<f:else>
+								<tr class="table-light">
+									<th>8# Knowledgeitems</th>
+									<td>Waiting</td>
+								</tr>
+							</f:else>
+						</f:if>
+					</f:else>
+				</f:if>
+				<f:if condition="{taskStep}>8">
+					<f:then>
+						<tr class="table-success">
+							<th>9# References</th>
+							<td>Done</td>
+						</tr>
+					</f:then>
+					<f:else>
+						<f:if condition="{taskStep}==8">
+							<f:then>
+								<tr class="table-primary">
+									<th>9# References</th>
+									<td>Working</td>
+								</tr>
+							</f:then>
+							<f:else>
+								<tr class="table-light">
+									<th>9# References</th>
+									<td>Waiting</td>
+								</tr>
+							</f:else>
+						</f:if>
+					</f:else>
+				</f:if>
+				<f:if condition="{taskStep}>9">
+					<f:then>
+						<tr class="table-success">
+							<th>10# Locations</th>
+							<td>Done</td>
+						</tr>
+					</f:then>
+					<f:else>
+						<f:if condition="{taskStep}==9">
+							<f:then>
+								<tr class="table-primary">
+									<th>10# Locations</th>
+									<td>Working</td>
+								</tr>
+							</f:then>
+							<f:else>
+								<tr class="table-light">
+									<th>10# Locations</th>
+									<td>Waiting</td>
+								</tr>
+							</f:else>
+						</f:if>
+					</f:else>
+				</f:if>
+				<f:if condition="{taskStep}>10">
+					<f:then>
+						<tr class="table-success">
+							<th>11# Files</th>
+							<td>Done</td>
+						</tr>
+					</f:then>
+					<f:else>
+						<f:if condition="{taskStep}==10">
+							<f:then>
+								<tr class="table-primary">
+									<th>11# Files</th>
+									<td>Working</td>
+								</tr>
+							</f:then>
+							<f:else>
+								<tr class="table-light">
+									<th>11# Files</th>
+									<td>Waiting</td>
+								</tr>
+							</f:else>
+						</f:if>
+					</f:else>
+				</f:if>
+				<f:if condition="{taskStep}>11">
+					<f:then>
+						<tr class="table-success">
+							<th>12# Cleaning</th>
+							<td>Done</td>
+						</tr>
+					</f:then>
+					<f:else>
+						<f:if condition="{taskStep}==11">
+							<f:then>
+								<tr class="table-primary">
+									<th>12# Cleaning</th>
+									<td>Working</td>
+								</tr>
+							</f:then>
+							<f:else>
+								<tr class="table-light">
+									<th>12# Cleaning</th>
+									<td>Waiting</td>
+								</tr>
+							</f:else>
+						</f:if>
+					</f:else>
+				</f:if>
+				<f:if condition="{taskStep}>12">
+					<f:then>
+						<tr class="table-success">
+							<th>13# Sorting</th>
+							<td>Done</td>
+						</tr>
+					</f:then>
+					<f:else>
+						<f:if condition="{taskStep}==12">
+							<f:then>
+								<tr class="table-primary">
+									<th>13# Sorting</th>
+									<td>Working</td>
+								</tr>
+							</f:then>
+							<f:else>
+								<tr class="table-light">
+									<th>13# Sorting</th>
+									<td>Waiting</td>
+								</tr>
+							</f:else>
+						</f:if>
+					</f:else>
+				</f:if>
+			</table>
+		</f:then>
+		<f:else>
+			<div class="alert alert-primary" role="alert">
+				No Upload in scheduler!
+			</div>
+		</f:else>
+	</f:if>
+</f:section>

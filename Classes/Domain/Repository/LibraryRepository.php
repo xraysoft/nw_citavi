@@ -34,28 +34,28 @@ class LibraryRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
   public function initializeObject() {
       /** @var $querySettings \TYPO3\CMS\Extbase\Persistence\Generic\Typo3QuerySettings */
       $querySettings = $this->objectManager->get('TYPO3\\CMS\\Extbase\\Persistence\\Generic\\Typo3QuerySettings');
-      
+
       $querySettings->setRespectStoragePage(FALSE);
-      
+
       $this->setDefaultQuerySettings($querySettings);
   }
 
-  public function findAllOptions() {
+  public function findAllOptions($settings) {
     /*$query = $this->createQuery();
     $sql = 'SELECT uid, name FROM tx_nwcitavi_domain_model_library WHERE deleted = 0 AND hidden = 0';
     $query->statement($sql);
     $res = $query->execute();
-    
+
     return $res;*/
   }
-  
+
   public function findByCitaviId($citaviId) {
     $query = $this->createQuery();
     $where = 'citavi_id LIKE \''.$citaviId.'\'';
     $sql = 'SELECT * FROM tx_nwcitavi_domain_model_library WHERE '.$where;
     $query->statement($sql);
     $res = $query->execute();
-    
+
     return $res;
-  }    
+  }
 }

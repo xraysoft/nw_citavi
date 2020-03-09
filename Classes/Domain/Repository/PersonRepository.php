@@ -3,13 +3,15 @@ namespace Netzweber\NwCitavi\Domain\Repository;
 
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Extbase\Persistence\Generic\Typo3QuerySettings;
+use TYPO3\CMS\Extbase\Persistence\QueryResultInterface;
 use TYPO3\CMS\Extbase\Utility\DebuggerUtility;
 
 /***************************************************************
  *
  *  Copyright notice
  *
- *  (c) 2014 Lutz Eckelmann <lutz.eckelmann@xraysoft.de>, Netzweber
+ *  (c) 2014 Lutz Eckelmann <lutz@eckelmann.biz>, Netzweber
  *
  *  All rights reserved
  *
@@ -34,229 +36,258 @@ use TYPO3\CMS\Extbase\Utility\DebuggerUtility;
  * The repository for Persons
  */
 class PersonRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
-  public function initializeObject() {
-      /** @var $querySettings \TYPO3\CMS\Extbase\Persistence\Generic\Typo3QuerySettings */
-      $querySettings = $this->objectManager->get('TYPO3\\CMS\\Extbase\\Persistence\\Generic\\Typo3QuerySettings');
+    public function initializeObject(): void
+    {
+        /** @var $querySettings Typo3QuerySettings */
+        $querySettings = $this->objectManager->get('TYPO3\\CMS\\Extbase\\Persistence\\Generic\\Typo3QuerySettings');
+        $querySettings->setRespectStoragePage(FALSE);
+        $this->setDefaultQuerySettings($querySettings);
+    }
 
-      $querySettings->setRespectStoragePage(FALSE);
+    /**
+     * Find all persons for the searchform
+     *
+     * @param null $group
+     * @param null $settings
+     * @return array
+     */
+    public function findAllOptions($group = null, $settings = null): array
+    {
+        $filterCategories = null;
+        $filterAuthors = null;
+        $filterPublishers = null;
+        $filterKeywords = null;
+        $filterReferenceTypes = null;
+        $orXCategory = null;
+        $orXAuthor = null;
+        $orXPublisher = null;
+        $orXKeyword = null;
+        $orXReference = null;
+        $res = array();
+        if(!empty($settings['selectedcategory'])) {
+            $filterCategories = explode(',', $settings['selectedcategory']);
+        }
+        if(!empty($settings['selectedauthor'])) {
+            $filterAuthors = explode(',', $settings['selectedauthor']);
+        }
+        if(!empty($settings['selectedpublisher'])) {
+            $filterPublishers = explode(',', $settings['selectedpublisher']);
+        }
+        if(!empty($settings['selectedkeyword'])) {
+            $filterKeywords = explode(',', $settings['selectedkeyword']);
+        }
+        if(!empty($settings['selectedreferencetype'])) {
+            $filterReferenceTypes = explode(',', $settings['selectedreferencetype']);
+        }
+        if($group) {
+            $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable('tx_nwcitavi_domain_model_person')->createQueryBuilder();
+            if(is_array($filterCategories)) {
+                $orXCategory = $queryBuilder->expr()->orX();
+                foreach($filterCategories as $filterCategory) {
+                    $orXCategory->add($queryBuilder->expr()->eq('mmcategory.uid_foreign', $queryBuilder->createNamedParameter($filterCategory, \PDO::PARAM_INT)));
+                }
+            }
+            if(is_array($filterAuthors)) {
+                $orXAuthor = $queryBuilder->expr()->orX();
+                foreach($filterAuthors as $filterAuthor) {
+                    $orXAuthor->add($queryBuilder->expr()->eq('mmauthor.uid_foreign', $queryBuilder->createNamedParameter($filterAuthor, \PDO::PARAM_INT)));
+                }
+            }
+            if(is_array($filterPublishers)) {
+                $orXPublisher = $queryBuilder->expr()->orX();
+                foreach($filterPublishers as $filterPublisher) {
+                    $orXPublisher->add($queryBuilder->expr()->eq('mmpublisher.uid_foreign', $queryBuilder->createNamedParameter($filterPublisher, \PDO::PARAM_INT)));
+                }
+            }
+            if(is_array($filterKeywords)) {
+                $orXKeyword = $queryBuilder->expr()->orX();
+                foreach($filterKeywords as $filterKeyword) {
+                    $orXKeyword->add($queryBuilder->expr()->eq('mmkeyword.uid_foreign', $queryBuilder->createNamedParameter($filterKeyword, \PDO::PARAM_INT)));
+                }
+            }
+            if(is_array($filterReferenceTypes)) {
+                $orXReference = $queryBuilder->expr()->orX();
+                foreach($filterReferenceTypes as $filterReferencetype) {
+                    $orXReference->add($queryBuilder->expr()->like('references.reference_type', $queryBuilder->createNamedParameter('%' . $queryBuilder->escapeLikeWildcards($filterReferencetype) . '%')));
+                }
+            }
+            if($group === 'supervisors') {
+                $queryBuilder
+                    ->select('tx_nwcitavi_domain_model_person.uid','last_name','first_name','middle_name')
+                    ->from('tx_nwcitavi_domain_model_person')
+                    ->join(
+                        'tx_nwcitavi_domain_model_person',
+                        'tx_nwcitavi_reference_collaborators_person_mm',
+                        'mmperson',
+                        $queryBuilder->expr()->eq('mmperson.uid_foreign', 'tx_nwcitavi_domain_model_person.uid')
+                    );
+            } else {
+                $queryBuilder
+                    ->select('tx_nwcitavi_domain_model_person.uid','last_name','first_name','middle_name')
+                    ->from('tx_nwcitavi_domain_model_person')
+                    ->join(
+                        'tx_nwcitavi_domain_model_person',
+                        'tx_nwcitavi_reference_'.$group.'_person_mm',
+                        'mmperson',
+                        $queryBuilder->expr()->eq('mmperson.uid_foreign', 'tx_nwcitavi_domain_model_person.uid')
+                    );
+            }
+            //DebuggerUtility::var_dump($orXCategory);
+            /*if(is_array($filterCategories)) {
+                $queryBuilder
+                    ->join(
+                        'mmperson',
+                        'tx_nwcitavi_reference_category_mm',
+                        'mmcategory',
+                        $queryBuilder->expr()->eq('mmcategory.uid_local', 'mmperson.uid_local')
+                    )
+                    ->where(
+                        $orXCategory
+                    );
+            }*/
+            if(is_array($filterAuthors)) {
+                $queryBuilder
+                    ->join(
+                        'mmperson',
+                        'tx_nwcitavi_reference_authors_person_mm',
+                        'mmauthor',
+                        $queryBuilder->expr()->eq('mmauthor.uid_local', 'mmperson.uid_local')
+                    )
+                    ->where(
+                        $orXAuthor
+                    );
+            }
+            if(is_array($filterPublishers)) {
+                $queryBuilder
+                    ->join(
+                        'mmperson',
+                        'tx_nwcitavi_reference_publisher_mm',
+                        'mmpublisher',
+                        $queryBuilder->expr()->eq('mmpublisher.uid_local', 'mmperson.uid_local')
+                    )
+                    ->where(
+                        $orXPublisher
+                    );
+            }
+            if(is_array($filterKeywords)) {
+                $queryBuilder
+                    ->join(
+                        'mmperson',
+                        'tx_nwcitavi_reference_keyword_mm',
+                        'mmkeyword',
+                        $queryBuilder->expr()->eq('mmkeyword.uid_local', 'mmperson.uid_local')
+                    )
+                    ->where(
+                        $orXKeyword
+                    );
+            }
+            if(is_array($filterReferenceTypes)) {
+                $queryBuilder
+                    ->join(
+                        'mmperson',
+                        'tx_nwcitavi_domain_model_reference',
+                        'references',
+                        $queryBuilder->expr()->eq('references.uid', 'mmperson.uid_local')
+                    )
+                    ->where(
+                        $orXReference
+                    );
+            }
+            $queryBuilder
+                ->groupBy('tx_nwcitavi_domain_model_person.uid')
+                ->orderBy('tx_nwcitavi_domain_model_person.last_name');
+            $statement = $queryBuilder->execute();
+            $i = 0;
+            while ($row = $statement->fetch()) {
+                $res[$i]['uid'] = $row['uid'];
+                $res[$i]['value'] = $row['last_name'].', '.$row['first_name'].' '.$row['middle_name'];
+                $i++;
+            }
+        }
+        return $res;
+    }
 
-      $this->setDefaultQuerySettings($querySettings);
-  }
+    /**
+     * Find person by citavi ID
+     *
+     * @param $citaviId
+     * @return array|QueryResultInterface
+     */
+    public function findByCitaviId($citaviId) {
+        $query = $this->createQuery();
+        $where = 'citavi_id LIKE \''.$citaviId.'\'';
+        $sql = 'SELECT * FROM tx_nwcitavi_domain_model_person WHERE '.$where;
+        $query->statement($sql);
+        return $query->execute();
+    }
 
-  public function findAllOptions($group = null, $settings = null) {
-      $filterCategories = null;
-      $filterAuthors = null;
-      $filterPublishers = null;
-      $filterKeywords = null;
-      $filterReferenceTypes = null;
-      $orXCategory = null;
-      $orXAuthor = null;
-      $orXPublisher = null;
-      $orXKeyword = null;
-      $orXReference = null;
-      $res = null;
-      if(!empty($settings['selectedcategory'])) {
-          $filterCategories = explode(',', $settings['selectedcategory']);
-      }
-      if(!empty($settings['selectedauthor'])) {
-          $filterAuthors = explode(',', $settings['selectedauthor']);
-      }
-      if(!empty($settings['selectedpublisher'])) {
-          $filterPublishers = explode(',', $settings['selectedpublisher']);
-      }
-      if(!empty($settings['selectedkeyword'])) {
-          $filterKeywords = explode(',', $settings['selectedkeyword']);
-      }
-      if(!empty($settings['selectedreferencetype'])) {
-          $filterReferenceTypes = explode(',', $settings['selectedreferencetype']);
-      }
-      if($group) {
-          $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable('tx_nwcitavi_domain_model_person')->createQueryBuilder();
-          if(is_array($filterCategories)) {
-              $orXCategory = $queryBuilder->expr()->orX();
-              foreach($filterCategories as $filterCategory) {
-                  $orXCategory->add($queryBuilder->expr()->eq('mmcategory.uid_foreign', $queryBuilder->createNamedParameter($filterCategory, \PDO::PARAM_INT)));
-              }
-          }
-          if(is_array($filterAuthors)) {
-              $orXAuthor = $queryBuilder->expr()->orX();
-              foreach($filterAuthors as $filterAuthor) {
-                  $orXAuthor->add($queryBuilder->expr()->eq('mmauthor.uid_foreign', $queryBuilder->createNamedParameter($filterAuthor, \PDO::PARAM_INT)));
-              }
-          }
-          if(is_array($filterPublishers)) {
-              $orXPublisher = $queryBuilder->expr()->orX();
-              foreach($filterPublishers as $filterPublisher) {
-                  $orXPublisher->add($queryBuilder->expr()->eq('mmpublisher.uid_foreign', $queryBuilder->createNamedParameter($filterPublisher, \PDO::PARAM_INT)));
-              }
-          }
-          if(is_array($filterKeywords)) {
-              $orXKeyword = $queryBuilder->expr()->orX();
-              foreach($filterKeywords as $filterKeyword) {
-                  $orXKeyword->add($queryBuilder->expr()->eq('mmkeyword.uid_foreign', $queryBuilder->createNamedParameter($filterKeyword, \PDO::PARAM_INT)));
-              }
-          }
-          if(is_array($filterReferenceTypes)) {
-              $orXReference = $queryBuilder->expr()->orX();
-              foreach($filterReferenceTypes as $filterReferencetype) {
-                  $orXReference->add($queryBuilder->expr()->like('references.reference_type', $queryBuilder->createNamedParameter('%' . $queryBuilder->escapeLikeWildcards($filterReferencetype) . '%')));
-              }
-          }
-          if($group === 'supervisors') {
-              $queryBuilder
-                  ->select('tx_nwcitavi_domain_model_person.uid','last_name','first_name','middle_name')
-                  ->from('tx_nwcitavi_domain_model_person')
-                  ->join(
-                      'tx_nwcitavi_domain_model_person',
-                      'tx_nwcitavi_reference_collaborators_person_mm',
-                      'mmperson',
-                      $queryBuilder->expr()->eq('mmperson.uid_foreign', 'tx_nwcitavi_domain_model_person.uid')
-                  );
-          } else {
-              $queryBuilder
-                  ->select('tx_nwcitavi_domain_model_person.uid','last_name','first_name','middle_name')
-                  ->from('tx_nwcitavi_domain_model_person')
-                  ->join(
-                      'tx_nwcitavi_domain_model_person',
-                      'tx_nwcitavi_reference_'.$group.'_person_mm',
-                      'mmperson',
-                      $queryBuilder->expr()->eq('mmperson.uid_foreign', 'tx_nwcitavi_domain_model_person.uid')
-                  );
-          }
-          if(is_array($filterCategories)) {
-              $queryBuilder
-                  ->join(
-                      'mmperson',
-                      'tx_nwcitavi_reference_category_mm',
-                      'mmcategory',
-                      $queryBuilder->expr()->eq('mmcategory.uid_local', 'mmperson.uid_local')
-                  )
-                  ->where(
-                      $orXCategory
-                  );
-          }
-          if(is_array($filterAuthors)) {
-              $queryBuilder
-                  ->join(
-                      'mmperson',
-                      'tx_nwcitavi_reference_authors_person_mm',
-                      'mmauthor',
-                      $queryBuilder->expr()->eq('mmauthor.uid_local', 'mmperson.uid_local')
-                  )
-                  ->where(
-                      $orXAuthor
-                  );
-          }
-          if(is_array($filterPublishers)) {
-              $queryBuilder
-                  ->join(
-                      'mmperson',
-                      'tx_nwcitavi_reference_publisher_mm',
-                      'mmpublisher',
-                      $queryBuilder->expr()->eq('mmpublisher.uid_local', 'mmperson.uid_local')
-                  )
-                  ->where(
-                      $orXPublisher
-                  );
-          }
-          if(is_array($filterKeywords)) {
-              $queryBuilder
-                  ->join(
-                      'mmperson',
-                      'tx_nwcitavi_reference_keyword_mm',
-                      'mmkeyword',
-                      $queryBuilder->expr()->eq('mmkeyword.uid_local', 'mmperson.uid_local')
-                  )
-                  ->where(
-                      $orXKeyword
-                  );
-          }
-          if(is_array($filterReferenceTypes)) {
-              $queryBuilder
-                  ->join(
-                      'mmperson',
-                      'tx_nwcitavi_domain_model_reference',
-                      'references',
-                      $queryBuilder->expr()->eq('references.uid', 'mmperson.uid_local')
-                  )
-                  ->where(
-                      $orXReference
-                  );
-          }
-          $queryBuilder
-              ->groupBy('tx_nwcitavi_domain_model_person.uid')
-              ->orderBy('tx_nwcitavi_domain_model_person.last_name');
+    /**
+     * Find author by UID
+     *
+     * @param $uid
+     * @return array|QueryResultInterface
+     */
+    public function findAuthorsByUid($uid) {
+        $query = $this->createQuery();
+        $where = 'mm.uid_local = '.$uid.' AND p.uid = mm.uid_foreign';
+        $sql = 'SELECT * FROM tx_nwcitavi_domain_model_person p, tx_nwcitavi_reference_authors_person_mm mm WHERE '.$where;
+        $query->statement($sql);
+        return $query->execute();
+    }
 
-          //DebuggerUtility::var_dump($queryBuilder);
-          $statement = $queryBuilder->execute();
-          $i = 0;
-          while ($row = $statement->fetch()) {
-              $res[$i]['uid'] = $row['uid'];
-              $res[$i]['value'] = $row['last_name'].', '.$row['first_name'].' '.$row['middle_name'];
-              $i++;
-          }
-      }
+    /**
+     * Find editor by UID
+     *
+     * @param $uid
+     * @return array|QueryResultInterface
+     */
+    public function findEditorsByUid($uid) {
+        $query = $this->createQuery();
+        $where = 'mm.uid_local = '.$uid.' AND p.uid = mm.uid_foreign';
+        $sql = 'SELECT * FROM tx_nwcitavi_domain_model_person p, tx_nwcitavi_reference_editors_person_mm mm WHERE '.$where;
+        $query->statement($sql);
+        return $query->execute();
+    }
 
-      return $res;
-  }
+    /**
+     * Find collaborator by UID
+     *
+     * @param $uid
+     * @return array|QueryResultInterface
+     */
+    public function findCollaboratorsByUid($uid) {
+        $query = $this->createQuery();
+        $where = 'mm.uid_local = '.$uid.' AND p.uid = mm.uid_foreign';
+        $sql = 'SELECT * FROM tx_nwcitavi_domain_model_person p, tx_nwcitavi_reference_collaborators_person_mm mm WHERE '.$where;
+        $query->statement($sql);
+        return $query->execute();
+    }
 
-  public function findByCitaviId($citaviId) {
-    $query = $this->createQuery();
-    $where = 'citavi_id LIKE \''.$citaviId.'\'';
-    $sql = 'SELECT * FROM tx_nwcitavi_domain_model_person WHERE '.$where;
-    $query->statement($sql);
-    $res = $query->execute();
+    /**
+     * Find organization by UID
+     *
+     * @param $uid
+     * @return array|QueryResultInterface
+     */
+    public function findOrganizationsByUid($uid) {
+        $query = $this->createQuery();
+        $where = 'mm.uid_local = '.$uid.' AND p.uid = mm.uid_foreign';
+        $sql = 'SELECT * FROM tx_nwcitavi_domain_model_person p, tx_nwcitavi_reference_organizations_person_mm mm WHERE '.$where;
+        $query->statement($sql);
+        return $query->execute();
+    }
 
-    return $res;
-  }
-
-  public function findAuthorsByUid($uid) {
-    $query = $this->createQuery();
-    $where = 'mm.uid_local = '.$uid.' AND p.uid = mm.uid_foreign';
-    $sql = 'SELECT * FROM tx_nwcitavi_domain_model_person p, tx_nwcitavi_reference_authors_person_mm mm WHERE '.$where;
-    $query->statement($sql);
-    $res = $query->execute();
-
-    return $res;
-  }
-
-  public function findEditorsByUid($uid) {
-    $query = $this->createQuery();
-    $where = 'mm.uid_local = '.$uid.' AND p.uid = mm.uid_foreign';
-    $sql = 'SELECT * FROM tx_nwcitavi_domain_model_person p, tx_nwcitavi_reference_editors_person_mm mm WHERE '.$where;
-    $query->statement($sql);
-    $res = $query->execute();
-
-    return $res;
-  }
-
-  public function findCollaboratorsByUid($uid) {
-    $query = $this->createQuery();
-    $where = 'mm.uid_local = '.$uid.' AND p.uid = mm.uid_foreign';
-    $sql = 'SELECT * FROM tx_nwcitavi_domain_model_person p, tx_nwcitavi_reference_collaborators_person_mm mm WHERE '.$where;
-    $query->statement($sql);
-    $res = $query->execute();
-
-    return $res;
-  }
-
-  public function findOrganizationsByUid($uid) {
-    $query = $this->createQuery();
-    $where = 'mm.uid_local = '.$uid.' AND p.uid = mm.uid_foreign';
-    $sql = 'SELECT * FROM tx_nwcitavi_domain_model_person p, tx_nwcitavi_reference_organizations_person_mm mm WHERE '.$where;
-    $query->statement($sql);
-    $res = $query->execute();
-
-    return $res;
-  }
-
-  public function findOthersInvolvedByUid($uid) {
-    $query = $this->createQuery();
-    $where = 'mm.uid_local = '.$uid.' AND p.uid = mm.uid_foreign';
-    $sql = 'SELECT * FROM tx_nwcitavi_domain_model_person p, tx_nwcitavi_reference_othersinvolved_person_mm mm WHERE '.$where;
-    $query->statement($sql);
-    $res = $query->execute();
-
-    return $res;
-  }
+    /**
+     * Find others involved by UID
+     *
+     * @param $uid
+     * @return array|QueryResultInterface
+     */
+    public function findOthersInvolvedByUid($uid) {
+        $query = $this->createQuery();
+        $where = 'mm.uid_local = '.$uid.' AND p.uid = mm.uid_foreign';
+        $sql = 'SELECT * FROM tx_nwcitavi_domain_model_person p, tx_nwcitavi_reference_othersinvolved_person_mm mm WHERE '.$where;
+        $query->statement($sql);
+        return $query->execute();
+    }
 }

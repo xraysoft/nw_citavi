@@ -1,6 +1,11 @@
 <?php
 namespace Netzweber\NwCitavi\Domain\Repository;
 
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Extbase\Persistence\QueryInterface;
+use TYPO3\CMS\Extbase\Persistence\QueryResultInterface;
+
 /***
  *
  * This file is part of the "Citavi" Extension for TYPO3 CMS.
@@ -22,40 +27,59 @@ class LogRepository extends \TYPO3\CMS\Extbase\Persistence\Repository
      * @var array
      */
     protected $defaultOrderings = array(
-        'sorting' => \TYPO3\CMS\Extbase\Persistence\QueryInterface::ORDER_ASCENDING
+        'sorting' => QueryInterface::ORDER_ASCENDING
     );
-    
-    public function addLog($error, $errortext, $func, $logtype, $details, $importkey = 0) {
-      $insertArray = array(
-        'error' => $error,
-        'errortext' => $errortext,
-        'func' => $func,
-        'logtype' => $logtype,
-        'details' => $details,
-        'importkey' => $importkey,
-        'tstamp' => time(),
-        'crdate' => time(),
-        'cruser_id' => '1'        
-      );
-      
-      $query  = $GLOBALS['TYPO3_DB']->exec_INSERTquery('tx_nwcitavi_domain_model_log', $insertArray);  
+
+    /**
+     * @param $error
+     * @param $errorText
+     * @param $func
+     * @param $logType
+     * @param $details
+     * @param int $importKey
+     */
+    public function addLog($error, $errorText, $func, $logType, $details, $importKey = 0): void
+    {
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('tx_nwcitavi_domain_model_log');
+        $queryBuilder
+            ->insert('tx_nwcitavi_domain_model_log')
+            ->values([
+                'error' => $error,
+                'errortext' => $errorText,
+                'func' => $func,
+                'logtype' => $logType,
+                'details' => $details,
+                'importkey' => $importKey,
+                'tstamp' => time(),
+                'crdate' => time(),
+                'cruser_id' => '1',
+            ])
+            ->execute();
     }
-    
+
+    /**
+     * @return array|QueryResultInterface
+     */
     public function findAll() {
-      $query = $this->createQuery();
-      $query->getQuerySettings()->setRespectSysLanguage(TRUE);
-      $query->getQuerySettings()->setIgnoreEnableFields(FALSE);
-      $query->getQuerySettings()->setIncludeDeleted(FALSE);
-      $query->getQuerySettings()->setRespectStoragePage(FALSE);
-      $query->setOrderings(
-        array(
-          'crdate' => \TYPO3\CMS\Extbase\Persistence\QueryInterface::ORDER_DESCENDING
-        )
-      );
-      return $query->execute();
+        $query = $this->createQuery();
+        $query->getQuerySettings()->setRespectSysLanguage(TRUE);
+        $query->getQuerySettings()->setIgnoreEnableFields(FALSE);
+        $query->getQuerySettings()->setIncludeDeleted(FALSE);
+        $query->getQuerySettings()->setRespectStoragePage(FALSE);
+        $query->setOrderings(
+            array(
+                'crdate' => QueryInterface::ORDER_DESCENDING
+            )
+        );
+        return $query->execute();
     }
-    
-    public function clearAll() {
-      $GLOBALS['TYPO3_DB']->exec_TRUNCATEquery('tx_nwcitavi_domain_model_log');
+
+    /**
+     *
+     */
+    public function clearAll(): void
+    {
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable('tx_nwcitavi_domain_model_log');
+        $queryBuilder->truncate('tx_nwcitavi_domain_model_log');
     }
 }

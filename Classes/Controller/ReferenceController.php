@@ -1,9 +1,12 @@
 <?php
 namespace Netzweber\NwCitavi\Controller;
 
+use Netzweber\NwCitavi\Domain\Repository\LogRepository;
+use Netzweber\NwCitavi\Domain\Repository\ReferenceRepository;
 use TYPO3\CMS\Core\Resource\Exception\InsufficientFolderAccessPermissionsException;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\VersionNumberUtility;
+use TYPO3\CMS\Extbase\Annotation\Inject;
 use TYPO3\CMS\Extbase\Mvc\Exception\StopActionException;
 use TYPO3\CMS\Extbase\Persistence\Exception\IllegalObjectTypeException;
 use TYPO3\CMS\Extbase\Persistence\Exception\UnknownObjectException;
@@ -22,20 +25,30 @@ use TYPO3\CMS\Extbase\Persistence\Exception\UnknownObjectException;
 class ReferenceController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionController
 {
     /**
-     * referenceRepository
-     *
-     * @var \Netzweber\NwCitavi\Domain\Repository\ReferenceRepository
-     * @inject
+     * @var ReferenceRepository
      */
-    protected $referenceRepository = null;
+    protected $referenceRepository;
 
     /**
-  	 * logRepository
-  	 *
-  	 * @var \Netzweber\NwCitavi\Domain\Repository\LogRepository
-  	 * @inject
-  	 */
-  	protected $logRepository = NULL;
+     * @param ReferenceRepository $referenceRepository
+     */
+    public function injectReferenceRepository(ReferenceRepository $referenceRepository)
+    {
+        $this->referenceRepository = $referenceRepository;
+    }
+
+    /**
+     * @var LogRepository
+     */
+    protected $logRepository;
+
+    /**
+     * @param LogRepository $logRepository
+     */
+    public function injectLogRepository(LogRepository $logRepository)
+    {
+        $this->logRepository = $logRepository;
+    }
 
     /**
      * action parser
@@ -155,7 +168,7 @@ class ReferenceController extends \TYPO3\CMS\Extbase\Mvc\Controller\ActionContro
                     break;
                 default:
                     $statusCodeText = $this->referenceRepository->getStatusCodeText(433);
-                    $this->logRepository->addLog(1, '' . $statusCodeText['text'] . ': ' . $statusCodeText['msg'] . '', 'Upload', '' . $uniqueId . '', '[Citavi Unkown Upload]: Upload was terminated.', '' . $_POST['import_key'] . '');
+                    $this->logRepository->addLog(1, '' . $statusCodeText['text'] . ': ' . $statusCodeText['msg'] . '', 'Upload', '' . $uniqueId . '', '[Citavi Unknown Upload]: Upload was terminated.', '' . $_POST['import_key'] . '');
                     $this->referenceRepository->getStatusCode(433);
                     die;
             }

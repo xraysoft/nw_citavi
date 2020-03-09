@@ -568,7 +568,7 @@ class Reference extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
      * attachment
      *
      * @var \TYPO3\CMS\Extbase\Domain\Model\FileReference
-     * @cascade remove
+     * @TYPO3\CMS\Extbase\Annotation\ORM\Cascade("remove")
      */
     protected $attachment = null;
 
@@ -576,7 +576,7 @@ class Reference extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
      * cover
      *
      * @var \TYPO3\CMS\Extbase\Domain\Model\FileReference
-     * @cascade remove
+     * @TYPO3\CMS\Extbase\Annotation\ORM\Cascade("remove")
      */
     protected $cover = null;
 

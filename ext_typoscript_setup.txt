@@ -30,6 +30,20 @@ plugin.tx_nwcitavi {
   }
 }
 
+module.tx_nwcitavi {
+    settings < plugin.tx_nwcitavi.settings
+    persistence < plugin.tx_nwcitavi.persistence
+    view < plugin.tx_nwcitavi.view
+    view {
+        templateRootPaths {
+            10 = EXT:nw_citavi/Resources/Private/Backend/Templates/
+        }
+        layoutRootPaths {
+           10 = EXT:nw_citavi/Resources/Private/Backend/Layouts/
+        }
+    }
+}
+
 config.tx_extbase {
 	persistence {
 		classes {

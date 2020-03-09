@@ -36,13 +36,13 @@ class KnowledgeItemRepository extends \TYPO3\CMS\Extbase\Persistence\Repository 
   public function initializeObject() {
       /** @var $querySettings \TYPO3\CMS\Extbase\Persistence\Generic\Typo3QuerySettings */
       $querySettings = $this->objectManager->get('TYPO3\\CMS\\Extbase\\Persistence\\Generic\\Typo3QuerySettings');
-      
+
       $querySettings->setRespectStoragePage(FALSE);
-      
+
       $this->setDefaultQuerySettings($querySettings);
   }
 
-  public function findAllOptions() {
+  public function findAllOptions($settings) {
     if(!empty($settings['selectedcategory'])) {
       $filterCategories = explode(",", $settings['selectedcategory']);
     }
@@ -121,7 +121,7 @@ class KnowledgeItemRepository extends \TYPO3\CMS\Extbase\Persistence\Repository 
         ->where(
           $orXAuthor
         );
-    }          
+    }
     if(is_array($filterPublishers)) {
       $queryBuilder
         ->join(
@@ -161,7 +161,7 @@ class KnowledgeItemRepository extends \TYPO3\CMS\Extbase\Persistence\Repository 
     $queryBuilder
       ->groupBy('tx_nwcitavi_domain_model_knowledgeitem.uid')
       ->orderBy('tx_nwcitavi_domain_model_knowledgeitem.text');
-      
+
     $statement = $queryBuilder->execute();
     $i = 0;
     while ($row = $statement->fetch()) {
@@ -169,27 +169,27 @@ class KnowledgeItemRepository extends \TYPO3\CMS\Extbase\Persistence\Repository 
       $res[$i]['value'] = $row['text'];
       $i++;
     }
-    
+
     return $res;
   }
-  
+
   public function findByCitaviId($citaviId) {
     $query = $this->createQuery();
     $where = 'citavi_id LIKE \''.$citaviId.'\'';
     $sql = 'SELECT * FROM tx_nwcitavi_domain_model_knowledgeitem WHERE '.$where;
     $query->statement($sql);
     $res = $query->execute();
-    
+
     return $res;
   }
-  
+
   public function findKnowledgeItemsByUid($uid) {
     $query = $this->createQuery();
     $where = 'mm.uid_local = '.$uid.' AND k.uid = mm.uid_foreign';
     $sql = 'SELECT * FROM tx_nwcitavi_domain_model_knowledgeitem k, tx_nwcitavi_reference_knowledgeitem_mm mm WHERE '.$where;
     $query->statement($sql);
     $res = $query->execute();
-    
+
     return $res;
-  }    
+  }
 }

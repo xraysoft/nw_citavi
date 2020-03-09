@@ -21,10 +21,10 @@ $EM_CONF[$_EXTKEY] = [
     'uploadfolder' => 'tx_nwcitavi',
     'createDirs' => 'fileadmin/user_upload/citavi_upload,fileadmin/user_upload/citavi_upload/export,fileadmin/user_upload/citavi_upload/files,fileadmin/user_upload/citavi_upload/log,fileadmin/user_upload/citavi_upload/backup,fileadmin/user_upload/citavi_upload/temp',
     'clearCacheOnLoad' => 0,
-    'version' => '8.7.2',
+    'version' => '9.5.2',
     'constraints' => [
         'depends' => [
-            'typo3' => '6.2.0-8.7.99',
+            'typo3' => '6.2.0-10.9.99',
         ],
         'conflicts' => [],
         'suggests' => [],

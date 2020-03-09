@@ -61,6 +61,22 @@ class Log extends \TYPO3\CMS\Extbase\DomainObject\AbstractEntity
     protected $importkey = '';
 
     /**
+     * @var \DateTime
+     */
+    protected $crdate = null;
+
+
+    /**
+     * Returns the creation date
+     *
+     * @return \DateTime $crdate
+     */
+    public function getCrdate()
+    {
+        return $this->crdate;
+    }
+
+    /**
      * Returns the error
      *
      * @return int $error

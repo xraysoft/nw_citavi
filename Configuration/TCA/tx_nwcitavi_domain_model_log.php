@@ -67,6 +67,11 @@ return [
                 ]
             ],
         ],
+        'crdate' => [
+            'config' => [
+                'type' => 'passthrough',
+            ],
+        ],
         'error' => [
 	        'exclude' => true,
 	        'label' => 'LLL:EXT:nw_citavi/Resources/Private/Language/locallang_db.xlf:tx_nwcitavi_domain_model_log.error',
