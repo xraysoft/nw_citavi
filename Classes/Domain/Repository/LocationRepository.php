@@ -54,11 +54,15 @@ class LocationRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
         $filterPublishers = null;
         $filterKeywords = null;
         $filterReferenceTypes = null;
+        $filterSeriesTitles = null;
+        $filterPeriodicals = null;
         $orXCategory = null;
         $orXAuthor = null;
         $orXPublisher = null;
         $orXKeyword = null;
         $orXReference = null;
+        $orXSeriesTitle = null;
+        $orXPeriodical = null;
         $res = array();
         if(!empty($settings['selectedcategory'])) {
             $filterCategories = explode(',', $settings['selectedcategory']);
@@ -74,6 +78,12 @@ class LocationRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
         }
         if(!empty($settings['selectedreferencetype'])) {
             $filterReferenceTypes = explode(',', $settings['selectedreferencetype']);
+        }
+        if(!empty($settings['selectedseriestitle'])) {
+            $filterSeriesTitles = explode(',', $settings['selectedseriestitle']);
+        }
+        if(!empty($settings['selectedperiodical'])) {
+            $filterPeriodicals = explode(',', $settings['selectedperiodical']);
         }
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable('tx_nwcitavi_domain_model_location')->createQueryBuilder();
         if(is_array($filterCategories)) {
@@ -106,14 +116,26 @@ class LocationRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
                 $orXReference->add($queryBuilder->expr()->like('references.reference_type', $queryBuilder->createNamedParameter('%' . $queryBuilder->escapeLikeWildcards($filterReferencetype) . '%')));
             }
         }
+        if(is_array($filterSeriesTitles)) {
+            $orXSeriesTitle = $queryBuilder->expr()->orX();
+            foreach($filterSeriesTitles as $filterSeriesTitle) {
+                $orXSeriesTitle->add($queryBuilder->expr()->eq('mmseriestitle.uid_foreign', $queryBuilder->createNamedParameter($filterSeriesTitle, \PDO::PARAM_INT)));
+            }
+        }
+        if(is_array($filterPeriodicals)) {
+            $orXPeriodical = $queryBuilder->expr()->orX();
+            foreach($filterPeriodicals as $filterPeriodical) {
+                $orXPeriodical->add($queryBuilder->expr()->eq('mmperiodical.uid_foreign', $queryBuilder->createNamedParameter($filterPeriodical, \PDO::PARAM_INT)));
+            }
+        }
         $queryBuilder
-            ->select('uid','address')
-            ->from('tx_nwcitavi_domain_model_location')
+            ->select('location.uid','location.address')
+            ->from('tx_nwcitavi_domain_model_location', 'location')
             ->join(
-                'tx_nwcitavi_domain_model_location',
+                'location',
                 'tx_nwcitavi_reference_location_mm',
                 'mmlocation',
-                $queryBuilder->expr()->eq('mmlocation.uid_foreign', 'tx_nwcitavi_domain_model_location.uid')
+                $queryBuilder->expr()->eq('mmlocation.uid_foreign', 'location.uid')
             );
         if(is_array($filterCategories)) {
             $queryBuilder
@@ -175,9 +197,33 @@ class LocationRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
                     $orXReference
                 );
         }
+        if(is_array($filterSeriesTitles)) {
+            $queryBuilder
+                ->join(
+                    'mmlocation',
+                    'tx_nwcitavi_reference_seriestitle_mm',
+                    'mmseriestitle',
+                    $queryBuilder->expr()->eq('mmseriestitle.uid_local', 'mmlocation.uid_local')
+                )
+                ->where(
+                    $orXSeriesTitle
+                );
+        }
+        if(is_array($filterPeriodicals)) {
+            $queryBuilder
+                ->join(
+                    'mmlocation',
+                    'tx_nwcitavi_reference_seriestitle_mm',
+                    'mmperiodical',
+                    $queryBuilder->expr()->eq('mmperiodical.uid_local', 'mmlocation.uid_local')
+                )
+                ->where(
+                    $orXSeriesTitle
+                );
+        }
         $queryBuilder
-            ->groupBy('tx_nwcitavi_domain_model_location.uid')
-            ->orderBy('tx_nwcitavi_domain_model_location.address');
+            ->groupBy('location.uid')
+            ->orderBy('location.address');
         $statement = $queryBuilder->execute();
         $i = 0;
         while ($row = $statement->fetch()) {

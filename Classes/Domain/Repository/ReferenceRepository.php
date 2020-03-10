@@ -2757,6 +2757,45 @@ class ReferenceRepository extends Repository
     }
 
     /**
+     * Get all available years
+     *
+     * @return null |null
+     */
+    public function findAllYearOptions() {
+        $option = null;
+        $options = null;
+        $reference = null;
+        $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getQueryBuilderForTable('tt_content');
+        $statement = $queryBuilder
+            ->select('sort_date')
+            ->from('tx_nwcitavi_domain_model_reference')
+            ->where(
+                $queryBuilder->expr()->eq('deleted', $queryBuilder->createNamedParameter(0, \PDO::PARAM_INT)),
+                $queryBuilder->expr()->eq('hidden', $queryBuilder->createNamedParameter(0, \PDO::PARAM_INT))
+            )
+            ->groupBy('tx_nwcitavi_domain_model_reference.sort_date')
+            ->orderBy('tx_nwcitavi_domain_model_reference.sort_date')
+            ->execute();
+        $i = 0;
+        while ($row = $statement->fetch()) {
+            if(!empty($row['sort_date'])) {
+                $options[$i]['id'] = $row['sort_date'];
+                $options[$i]['title'] = $row['sort_date'];
+                $i++;
+            }
+        }
+        if (is_array($options) || is_object($options)) {
+            foreach ($options as $key => $row) {
+                $option[$key] = $row['title'];
+            }
+            if (is_array($option) || is_object($option)) {
+                array_multisort($option, SORT_DESC, $options);
+            }
+        }
+        return $options;
+    }
+
+    /**
      * Check if the advenced search should be displayed
      *
      * @param $settings

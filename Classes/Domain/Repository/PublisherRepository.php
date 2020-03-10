@@ -54,11 +54,15 @@ class PublisherRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
         $filterPublishers = null;
         $filterKeywords = null;
         $filterReferenceTypes = null;
+        $filterSeriesTitles = null;
+        $filterPeriodicals = null;
         $orXCategory = null;
         $orXAuthor = null;
         $orXPublisher = null;
         $orXKeyword = null;
         $orXReference = null;
+        $orXSeriesTitle = null;
+        $orXPeriodical = null;
         $res = array();
         if(!empty($settings['selectedcategory'])) {
             $filterCategories = explode(',', $settings['selectedcategory']);
@@ -74,6 +78,12 @@ class PublisherRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
         }
         if(!empty($settings['selectedreferencetype'])) {
             $filterReferenceTypes = explode(',', $settings['selectedreferencetype']);
+        }
+        if(!empty($settings['selectedseriestitle'])) {
+            $filterSeriesTitles = explode(',', $settings['selectedseriestitle']);
+        }
+        if(!empty($settings['selectedperiodical'])) {
+            $filterPeriodicals = explode(',', $settings['selectedperiodical']);
         }
         $queryBuilder = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable('tx_nwcitavi_domain_model_publisher')->createQueryBuilder();
         if(is_array($filterCategories)) {
@@ -106,14 +116,26 @@ class PublisherRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
                 $orXReference->add($queryBuilder->expr()->like('references.reference_type', $queryBuilder->createNamedParameter('%' . $queryBuilder->escapeLikeWildcards($filterReferencetype) . '%')));
             }
         }
+        if(is_array($filterSeriesTitles)) {
+            $orXSeriesTitle = $queryBuilder->expr()->orX();
+            foreach($filterSeriesTitles as $filterSeriesTitle) {
+                $orXSeriesTitle->add($queryBuilder->expr()->eq('mmseriestitle.uid_foreign', $queryBuilder->createNamedParameter($filterSeriesTitle, \PDO::PARAM_INT)));
+            }
+        }
+        if(is_array($filterPeriodicals)) {
+            $orXPeriodical = $queryBuilder->expr()->orX();
+            foreach($filterPeriodicals as $filterPeriodical) {
+                $orXPeriodical->add($queryBuilder->expr()->eq('mmperiodical.uid_foreign', $queryBuilder->createNamedParameter($filterPeriodical, \PDO::PARAM_INT)));
+            }
+        }
         $queryBuilder
-            ->select('tx_nwcitavi_domain_model_publisher.uid','name')
-            ->from('tx_nwcitavi_domain_model_publisher')
+            ->select('publisher.uid','publisher.name')
+            ->from('tx_nwcitavi_domain_model_publisher', 'publisher')
             ->join(
-                'tx_nwcitavi_domain_model_publisher',
+                'publisher',
                 'tx_nwcitavi_reference_publisher_mm',
                 'mmpublisher',
-                $queryBuilder->expr()->eq('mmpublisher.uid_foreign', 'tx_nwcitavi_domain_model_publisher.uid')
+                $queryBuilder->expr()->eq('mmpublisher.uid_foreign', 'publisher.uid')
             );
         if(is_array($filterCategories)) {
             $queryBuilder
@@ -144,8 +166,8 @@ class PublisherRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
                 ->join(
                     'mmpublisher',
                     'tx_nwcitavi_reference_publisher_mm',
-                    'mmpublisher',
-                    $queryBuilder->expr()->eq('mmpublisher.uid_local', 'mmpublisher.uid_local')
+                    'mmpublisher2',
+                    $queryBuilder->expr()->eq('mmpublisher2.uid_local', 'mmpublisher.uid_local')
                 )
                 ->where(
                     $orXPublisher
@@ -175,9 +197,33 @@ class PublisherRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
                     $orXReference
                 );
         }
+        if(is_array($filterSeriesTitles)) {
+            $queryBuilder
+                ->join(
+                    'mmpublisher',
+                    'tx_nwcitavi_reference_seriestitle_mm',
+                    'mmseriestitle',
+                    $queryBuilder->expr()->eq('mmseriestitle.uid_local', 'mmpublisher.uid_local')
+                )
+                ->where(
+                    $orXSeriesTitle
+                );
+        }
+        if(is_array($filterPeriodicals)) {
+            $queryBuilder
+                ->join(
+                    'mmpublisher',
+                    'tx_nwcitavi_reference_seriestitle_mm',
+                    'mmperiodical',
+                    $queryBuilder->expr()->eq('mmperiodical.uid_local', 'mmpublisher.uid_local')
+                )
+                ->where(
+                    $orXSeriesTitle
+                );
+        }
         $queryBuilder
-            ->groupBy('tx_nwcitavi_domain_model_publisher.uid')
-            ->orderBy('tx_nwcitavi_domain_model_publisher.name');
+            ->groupBy('publisher.uid')
+            ->orderBy('publisher.name');
         $statement = $queryBuilder->execute();
         $i = 0;
         while ($row = $statement->fetch()) {
