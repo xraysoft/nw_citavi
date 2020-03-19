@@ -2953,6 +2953,9 @@ class ReferenceRepository extends Repository
         $selectedPeriodical = null;
         $periodical = null;
         $periodicalsConstraints = null;
+        $selectedSupervisors = null;
+        $supervisor = null;
+        $supervisorsConstraints = null;
         $constraints[] = $query->like('literaturlistId', $settings['import_key']);
         if(!empty($settings['searchstr'])) {
             switch($settings['searchOptions']) {
@@ -3335,6 +3338,26 @@ class ReferenceRepository extends Repository
                 );
             }
         }
+
+        $selectedSupervisors = explode(',', $settings['searchSupervisors']);
+        if(empty($selectedSupervisors[0]) || $selectedSupervisors[0] === '-1') {
+            unset($selectedSupervisors);
+        }
+        if ( is_array( $selectedSupervisors ) ) {
+            $numberOfSelectedSupervisors = count($selectedSupervisors);
+            if($numberOfSelectedSupervisors > 0) {
+                foreach($selectedSupervisors as $key => $value) {
+                    $supervisor[$key] = (int)$value;
+                }
+                for($i = 0; $i < $numberOfSelectedSupervisors; $i++) {
+                    $supervisorsConstraints[] = $query->contains('collaborators', $supervisor[$i]);
+                }
+                $constraints[] = $query->logicalOr(
+                    $supervisorsConstraints
+                );
+            }
+        }
+
         $selectedSpecialCategories = explode(',', $settings['searchSpecialcategories']);
         if(empty($selectedSpecialCategories[0]) || $selectedSpecialCategories[0] === '-1') {
             unset($selectedSpecialCategories);
