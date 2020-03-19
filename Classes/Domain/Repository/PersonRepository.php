@@ -70,6 +70,17 @@ class PersonRepository extends \TYPO3\CMS\Extbase\Persistence\Repository {
         $res = array();
         if(!empty($settings['selectedcategory'])) {
             $filterCategories = explode(',', $settings['selectedcategory']);
+            $categoryRepository = GeneralUtility::makeInstance(CategoryRepository::class);
+            $filterSubCategories = array();
+            foreach($filterCategories as $filterCategory) {
+                $subCategories = $categoryRepository->findAllChildCategoryOptions((int)$filterCategory);
+                foreach ($subCategories as $subCategory) {
+                    $filterSubCategories[] = (string)$subCategory->getUid();
+                }
+            }
+            if(is_array($filterSubCategories)) {
+                $filterCategories = array_merge($filterCategories, $filterSubCategories);
+            }
         }
         if(!empty($settings['selectedauthor'])) {
             $filterAuthors = explode(',', $settings['selectedauthor']);
