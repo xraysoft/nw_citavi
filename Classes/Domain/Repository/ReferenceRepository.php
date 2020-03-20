@@ -2920,6 +2920,7 @@ class ReferenceRepository extends Repository
      */
     public function getAndOrConstraints($query, $settings): array
     {
+        //DebuggerUtility::var_dump($settings);
         $selectedAuthor = null;
         $authorConstraints = null;
         $author = null;
@@ -3338,7 +3339,6 @@ class ReferenceRepository extends Repository
                 );
             }
         }
-
         $selectedSupervisors = explode(',', $settings['searchSupervisors']);
         if(empty($selectedSupervisors[0]) || $selectedSupervisors[0] === '-1') {
             unset($selectedSupervisors);
@@ -3357,7 +3357,24 @@ class ReferenceRepository extends Repository
                 );
             }
         }
-
+        $selectedSeriesTitles = explode(',', $settings['searchSeriestitles']);
+        if(empty($selectedSeriesTitles[0]) || $selectedSeriesTitles[0] === '-1') {
+            unset($selectedSeriesTitles);
+        }
+        if ( is_array( $selectedSeriesTitles ) ) {
+            $numberOfSelectedSeriesTitles = count($selectedSeriesTitles);
+            if($numberOfSelectedSeriesTitles > 0) {
+                foreach($selectedSeriesTitles as $key => $value) {
+                    $seriesTitle[$key] = (int)$value;
+                }
+                for($i = 0; $i < $numberOfSelectedSeriesTitles; $i++) {
+                    $seriesTitlesConstraints[] = $query->contains('seriestitles', $seriesTitle[$i]);
+                }
+                $constraints[] = $query->logicalOr(
+                    $seriesTitlesConstraints
+                );
+            }
+        }
         $selectedSpecialCategories = explode(',', $settings['searchSpecialcategories']);
         if(empty($selectedSpecialCategories[0]) || $selectedSpecialCategories[0] === '-1') {
             unset($selectedSpecialCategories);
