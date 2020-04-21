@@ -67,27 +67,29 @@ class LogController extends ActionController
             $schedulerString = file_get_contents ( $dir.'/scheduler.txt' );
             $schedulerCols = explode('|', $schedulerString);
             [$fileName, $key, $uniqueId] = $schedulerCols;
-            $xml = new \XMLReader();
-            $xml->open($fileName);
-            $xmlString = implode('', file($fileName));
-            $xml = simplexml_load_string($xmlString);
-            $json = json_encode($xml);
-            $array = json_decode($json,TRUE);
-            $taskExists = file_exists($dir.'/task.txt');
-            $this->view->assign('taskStep', 0);
-            $this->view->assign('taskPercent', 0);
-            if($taskExists) {
-                $taskString = file_get_contents ( $dir.'/task.txt' );
-                $this->view->assign('taskStep', $taskString);
-                $this->view->assign('taskPercent', (int)$taskString*100/12);
+            if(file_exists ( $fileName )) {
+                $xml = new \XMLReader();
+                $xml->open($fileName);
+                $xmlString = implode('', file($fileName));
+                $xml = simplexml_load_string($xmlString);
+                $json = json_encode($xml);
+                $array = json_decode($json,TRUE);
+                $taskExists = file_exists($dir.'/task.txt');
+                $this->view->assign('taskStep', 0);
+                $this->view->assign('taskPercent', 0);
+                if($taskExists) {
+                    $taskString = file_get_contents ( $dir.'/task.txt' );
+                    $this->view->assign('taskStep', $taskString);
+                    $this->view->assign('taskPercent', (int)$taskString*100/12);
+                }
+                $this->view->assign('activeScheduler', true);
+                $this->view->assign('uploadStart', filemtime ($fileName));
+                $this->view->assign('ciatviVersion', $array['@attributes']['Version']);
+                $this->view->assign('ciatviFilePath', $array['@attributes']['FilePath']);
+                $this->view->assign('ciatviProjectRecordVersion', $array['ProjectRecordVersion']);
+                $this->view->assign('importKey', $key);
+                $this->view->assign('uniqueId', $uniqueId);
             }
-            $this->view->assign('activeScheduler', true);
-            $this->view->assign('uploadStart', filemtime ($fileName));
-            $this->view->assign('ciatviVersion', $array['@attributes']['Version']);
-            $this->view->assign('ciatviFilePath', $array['@attributes']['FilePath']);
-            $this->view->assign('ciatviProjectRecordVersion', $array['ProjectRecordVersion']);
-            $this->view->assign('importKey', $key);
-            $this->view->assign('uniqueId', $uniqueId);
         }
     }
 }
