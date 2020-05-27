@@ -2474,6 +2474,7 @@ class ReferenceRepository extends Repository
                     }
 
                     $resourceFactory = ResourceFactory::getInstance();
+                    // In PID mit Typoscript constants ändern
                     $defaultStorage = $resourceFactory->getDefaultStorage();
                     $folder = $defaultStorage->getFolder('/user_upload/citavi_upload/');
                     $files = $defaultStorage->getFilesInFolder($folder);
@@ -3378,7 +3379,7 @@ class ReferenceRepository extends Repository
         }
         if((int)$settings['searchYearfrom'] > 0 && (int)$settings['searchYearto'] > 0) {
             $constraints[] = $query->logicalAnd(
-                $query->logicalOr(
+                /*$query->logicalOr(
                     $query->logicalAnd(
                         $query->greaterThanOrEqual('bookDate', (int)$settings['searchYearfrom']),
                         $query->lessThanOrEqual('bookDate', (int)$settings['searchYearto'])
@@ -3387,18 +3388,21 @@ class ReferenceRepository extends Repository
                         $query->greaterThanOrEqual('bookYear', (int)$settings['searchYearfrom']),
                         $query->lessThanOrEqual('bookYear', (int)$settings['searchYearto'])
                     )
-                )
+                )*/
+                $query->greaterThanOrEqual('sortDate', (int)$settings['searchYearfrom']),
+                $query->lessThanOrEqual('sortDate', (int)$settings['searchYearto'])
             );
         } else if((int)$settings['searchYearfrom'] > 0 && (int)$settings['searchYearto'] === -1) {
             $constraints[] = $query->logicalAnd(
-                $query->logicalOr(
+                /*$query->logicalOr(
                     $query->greaterThanOrEqual('bookDate', (int)$settings['searchYearfrom']),
                     $query->greaterThanOrEqual('bookYear', (int)$settings['searchYearfrom'])
-                )
+                )*/
+                $query->greaterThanOrEqual('sortDate', (int)$settings['searchYearfrom'])
             );
         } else if((int)$settings['searchYearfrom'] === -1 && (int)$settings['searchYearto'] > 0) {
             $constraints[] = $query->logicalAnd(
-                $query->logicalOr(
+                /*$query->logicalOr(
                     $query->logicalAnd(
                         $query->lessThanOrEqual('bookDate', (int)$settings['searchYearto']),
                         $query->greaterThan('bookDate', 0)
@@ -3407,7 +3411,9 @@ class ReferenceRepository extends Repository
                         $query->lessThanOrEqual('bookYear', (int)$settings['searchYearto']),
                         $query->greaterThan('bookYear', 0)
                     )
-                )
+                )*/
+                $query->lessThanOrEqual('sortDate', (int)$settings['searchYearto']),
+                $query->greaterThan('sortDate', 0)
             );
         }
         $notConstraints = $this->getNotConstraints($query, $settings);
