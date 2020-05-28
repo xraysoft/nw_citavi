@@ -733,12 +733,24 @@ class ReferenceRepository extends Repository
      */
     public function deletedDatabaseColumns($t1, $t2, $settings): void
     {
-        $query = $this->createQuery();
+        /*$query = $this->createQuery();
         if($t1 === 'tx_nwcitavi_domain_model_category') {
             $query->statement('DELETE r FROM '.$t1.' r LEFT JOIN '.$t2.' rh ON r.citavi_hash = rh.citavi_hash WHERE rh.citavi_hash IS NULL AND r.pid = '.$settings['sPid']);
         } else {
             $query->statement('DELETE r FROM '.$t1.' r LEFT JOIN '.$t2.' rh ON r.citavi_hash = rh.citavi_hash WHERE rh.citavi_hash IS NULL');
         }
+        DebuggerUtility::var_dump($query);
+        $result = $query->execute(true);
+        DebuggerUtility::var_dump($result);*/
+        //DebuggerUtility::var_dump();
+        $db = $GLOBALS['TYPO3_CONF_VARS']['DB']['Connections']['Default'];
+        $mysqli = new \mysqli($db['host'], $db['user'], $db['password'], $db['dbname']);
+        if($t1 === 'tx_nwcitavi_domain_model_category') {
+            $result = $mysqli->query('DELETE r FROM '.$t1.' r LEFT JOIN '.$t2.' rh ON r.citavi_hash = rh.citavi_hash WHERE rh.citavi_hash IS NULL AND r.pid = '.$settings['sPid']);
+        } else {
+            $result = $mysqli->query('DELETE r FROM '.$t1.' r LEFT JOIN '.$t2.' rh ON r.citavi_hash = rh.citavi_hash WHERE rh.citavi_hash IS NULL');
+        }
+        $mysqli->close();
     }
 
     /**
@@ -1433,7 +1445,7 @@ class ReferenceRepository extends Repository
     public function deletedDoubleDatabaseColumns($t): void
     {
         $query = $this->createQuery();
-        $query->statement('DELETE t1 FROM '.$t.' t1 INNER JOIN '.$t.' t2 WHERE t1.uid < t2.uid AND t1.citavi_hash = t2.citavi_hash;');
+        $query->statement('DELETE t1 FROM '.$t.' t1 INNER JOIN '.$t.' t2 WHERE t1.uid <> t2.uid AND t1.citavi_hash = t2.citavi_hash;');
     }
 
     /**
@@ -2246,6 +2258,7 @@ class ReferenceRepository extends Repository
             $fullTs = $configurationManager->getConfiguration(ConfigurationManagerInterface::CONFIGURATION_TYPE_FULL_TYPOSCRIPT);
             $settings = $fullTs['plugin.']['tx_nwcitavi.']['settings.'];
             $check = file_exists($dir.'/scheduler.txt');
+
             if($check) {
             	$taskExists = file_exists($dir.'/task.txt');
             	if($taskExists) {
@@ -2255,7 +2268,7 @@ class ReferenceRepository extends Repository
             	        $this->compareHashData($settings);
             	        $this->compareExportFiles($settings);
 
-            	        file_put_contents($dir.'/task.txt', 12);
+            	        //file_put_contents($dir.'/task.txt', 12);
             	    }
             	}
             }
